@@ -1,0 +1,113 @@
+package com.ttokttok.adapter.out.persistence.repository
+
+import com.ttokttok.adapter.out.persistence.entity.AttendanceDayEntity
+import com.ttokttok.adapter.out.persistence.entity.AttendanceEventEntity
+import com.ttokttok.adapter.out.persistence.entity.ClassroomEntity
+import com.ttokttok.adapter.out.persistence.entity.DestinationEntity
+import com.ttokttok.adapter.out.persistence.entity.DeviceTokenEntity
+import com.ttokttok.adapter.out.persistence.entity.EnrollmentEntity
+import com.ttokttok.adapter.out.persistence.entity.GuardianEntity
+import com.ttokttok.adapter.out.persistence.entity.InstitutionEntity
+import com.ttokttok.adapter.out.persistence.entity.MembershipEntity
+import com.ttokttok.adapter.out.persistence.entity.NotificationLogEntity
+import com.ttokttok.adapter.out.persistence.entity.OutboxEntity
+import com.ttokttok.adapter.out.persistence.entity.StudentEntity
+import com.ttokttok.adapter.out.persistence.entity.UserEntity
+import org.springframework.data.domain.Pageable
+import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
+import java.time.Instant
+import java.time.LocalDate
+import java.util.UUID
+
+interface InstitutionJpaRepository : JpaRepository<InstitutionEntity, UUID>
+
+interface UserJpaRepository : JpaRepository<UserEntity, UUID> {
+    fun findByEmail(email: String): UserEntity?
+    fun findByPhoneHash(phoneHash: String): UserEntity?
+}
+
+interface MembershipJpaRepository : JpaRepository<MembershipEntity, UUID> {
+    fun findByUserIdAndInstitutionId(userId: UUID, institutionId: UUID): MembershipEntity?
+    fun findByUserId(userId: UUID): List<MembershipEntity>
+}
+
+interface ClassroomJpaRepository : JpaRepository<ClassroomEntity, UUID> {
+    fun findByIdAndInstitutionIdAndDeletedAtIsNull(id: UUID, institutionId: UUID): ClassroomEntity?
+    fun findByInstitutionIdAndDeletedAtIsNull(institutionId: UUID): List<ClassroomEntity>
+
+    @Query(value = "select * from classroom where deleted_at is null and (days_mask & :bit) <> 0", nativeQuery = true)
+    fun findHeldOn(@Param("bit") dayBit: Int): List<ClassroomEntity>
+}
+
+interface StudentJpaRepository : JpaRepository<StudentEntity, UUID> {
+    fun findByIdAndInstitutionId(id: UUID, institutionId: UUID): StudentEntity?
+    fun findByInstitutionId(institutionId: UUID): List<StudentEntity>
+}
+
+interface EnrollmentJpaRepository : JpaRepository<EnrollmentEntity, Long> {
+    fun findByStudentIdAndToDateIsNull(studentId: UUID): List<EnrollmentEntity>
+    fun findByClassroomIdAndToDateIsNull(classroomId: UUID): List<EnrollmentEntity>
+}
+
+interface GuardianJpaRepository : JpaRepository<GuardianEntity, UUID> {
+    fun findByStudentId(studentId: UUID): List<GuardianEntity>
+    fun findByPhoneHash(phoneHash: String): List<GuardianEntity>
+    fun findByUserId(userId: UUID): List<GuardianEntity>
+}
+
+interface DestinationJpaRepository : JpaRepository<DestinationEntity, UUID> {
+    fun findByIdAndInstitutionId(id: UUID, institutionId: UUID): DestinationEntity?
+    fun findByInstitutionId(institutionId: UUID): List<DestinationEntity>
+}
+
+interface AttendanceDayJpaRepository : JpaRepository<AttendanceDayEntity, UUID> {
+    @Query(
+        value = "select * from attendance_day where student_id = :studentId and classroom_id = :classroomId and date = :date for update",
+        nativeQuery = true,
+    )
+    fun findForUpdate(@Param("studentId") studentId: UUID, @Param("classroomId") classroomId: UUID, @Param("date") date: LocalDate): AttendanceDayEntity?
+
+    fun findByClassroomIdAndDate(classroomId: UUID, date: LocalDate): List<AttendanceDayEntity>
+
+    fun findByStatusAndDateLessThanEqual(status: String, date: LocalDate): List<AttendanceDayEntity>
+
+    @Modifying
+    @Query(
+        value = """insert into attendance_day (id, institution_id, student_id, classroom_id, date, status)
+                   values (:id, :institutionId, :studentId, :classroomId, :date, 'SCHEDULED')
+                   on conflict (student_id, classroom_id, date) do nothing""",
+        nativeQuery = true,
+    )
+    fun insertIfAbsent(
+        @Param("id") id: UUID, @Param("institutionId") institutionId: UUID, @Param("studentId") studentId: UUID,
+        @Param("classroomId") classroomId: UUID, @Param("date") date: LocalDate,
+    ): Int
+}
+
+interface AttendanceEventJpaRepository : JpaRepository<AttendanceEventEntity, UUID> {
+    fun findByInstitutionIdAndIdempotencyKey(institutionId: UUID, idempotencyKey: String): AttendanceEventEntity?
+
+    fun findByStudentIdInOrderByOccurredAtDesc(studentIds: Collection<UUID>, pageable: Pageable): List<AttendanceEventEntity>
+
+    fun findByStudentIdInAndOccurredAtBeforeOrderByOccurredAtDesc(
+        studentIds: Collection<UUID>, before: Instant, pageable: Pageable,
+    ): List<AttendanceEventEntity>
+}
+
+interface OutboxJpaRepository : JpaRepository<OutboxEntity, UUID> {
+    @Query(
+        value = """select * from outbox where status = 'PENDING' and next_attempt_at <= :now
+                   order by next_attempt_at limit :limit for update skip locked""",
+        nativeQuery = true,
+    )
+    fun lockPending(@Param("now") now: Instant, @Param("limit") limit: Int): List<OutboxEntity>
+}
+
+interface DeviceTokenJpaRepository : JpaRepository<DeviceTokenEntity, String> {
+    fun findByUserIdInAndFlavor(userIds: Collection<UUID>, flavor: String): List<DeviceTokenEntity>
+}
+
+interface NotificationLogJpaRepository : JpaRepository<NotificationLogEntity, Long>

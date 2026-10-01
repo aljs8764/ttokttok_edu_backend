@@ -1,0 +1,101 @@
+package com.ttokttok.application.port.out
+
+import com.ttokttok.domain.attendance.AttendanceDay
+import com.ttokttok.domain.attendance.AttendanceEvent
+import com.ttokttok.domain.classroom.Classroom
+import com.ttokttok.domain.common.AttendanceDayId
+import com.ttokttok.domain.common.ClassroomId
+import com.ttokttok.domain.common.DestinationId
+import com.ttokttok.domain.common.InstitutionId
+import com.ttokttok.domain.common.PhoneNumber
+import com.ttokttok.domain.common.StudentId
+import com.ttokttok.domain.common.UserId
+import com.ttokttok.domain.destination.Destination
+import com.ttokttok.domain.device.AppFlavor
+import com.ttokttok.domain.device.DeviceToken
+import com.ttokttok.domain.institution.Institution
+import com.ttokttok.domain.student.Enrollment
+import com.ttokttok.domain.student.Guardian
+import com.ttokttok.domain.student.Student
+import com.ttokttok.domain.user.Membership
+import com.ttokttok.domain.user.User
+import java.time.Instant
+import java.time.LocalDate
+
+// 영속성 Outbound Port. 구현은 adapter-out-persistence.
+// 기관 범위 데이터는 모든 조회에 institutionId를 받아 테넌트 경계를 강제한다.
+
+interface InstitutionPort {
+    fun save(institution: Institution): Institution
+    fun findById(id: InstitutionId): Institution?
+    fun findAllByIds(ids: Collection<InstitutionId>): List<Institution>
+}
+
+interface UserPort {
+    fun save(user: User): User
+    fun findById(id: UserId): User?
+    fun findByEmail(email: String): User?
+    fun findByPhone(phone: PhoneNumber): User?
+}
+
+interface MembershipPort {
+    fun save(membership: Membership): Membership
+    fun find(userId: UserId, institutionId: InstitutionId): Membership?
+    fun findByUser(userId: UserId): List<Membership>
+}
+
+interface ClassroomPort {
+    fun save(classroom: Classroom): Classroom
+    fun find(id: ClassroomId, institutionId: InstitutionId): Classroom?
+    fun findByInstitution(institutionId: InstitutionId): List<Classroom>
+    fun findAllHeldOn(date: LocalDate): List<Classroom>
+}
+
+interface StudentPort {
+    fun save(student: Student): Student
+    fun find(id: StudentId, institutionId: InstitutionId): Student?
+    fun findAllByIds(ids: Collection<StudentId>): List<Student>
+    fun findByInstitution(institutionId: InstitutionId): List<Student>
+}
+
+interface EnrollmentPort {
+    fun save(enrollment: Enrollment): Enrollment
+    fun findCurrent(studentId: StudentId): List<Enrollment>
+    fun findCurrentStudentIds(classroomId: ClassroomId): List<StudentId>
+}
+
+interface GuardianPort {
+    fun save(guardian: Guardian): Guardian
+    fun findByStudent(studentId: StudentId): List<Guardian>
+    fun findByPhone(phone: PhoneNumber): List<Guardian>
+    fun findLinkedByUser(userId: UserId): List<Guardian>
+}
+
+interface DestinationPort {
+    fun save(destination: Destination): Destination
+    fun find(id: DestinationId, institutionId: InstitutionId): Destination?
+    fun findAllByIds(ids: Collection<DestinationId>): List<Destination>
+    fun findByInstitution(institutionId: InstitutionId): List<Destination>
+}
+
+interface AttendancePort {
+    /** 같은 학생·반·날짜 행을 행 잠금(FOR UPDATE)으로 조회 — 더블 터치 동시성 방지 */
+    fun findDayForUpdate(studentId: StudentId, classroomId: ClassroomId, date: LocalDate): AttendanceDay?
+    fun findDays(classroomId: ClassroomId, date: LocalDate): List<AttendanceDay>
+    fun findDayById(id: AttendanceDayId): AttendanceDay?
+    fun findDaysByIds(ids: Collection<AttendanceDayId>): List<AttendanceDay>
+    fun saveDay(day: AttendanceDay): AttendanceDay
+    /** 이미 있으면 무시하고 false (배치 재실행 안전) */
+    fun insertDayIfAbsent(day: AttendanceDay): Boolean
+    fun findScheduledBefore(dateInclusive: LocalDate): List<AttendanceDay>
+    fun saveEvent(event: AttendanceEvent, idempotencyKey: String?)
+    fun findEventByIdempotencyKey(institutionId: InstitutionId, key: String): AttendanceEvent?
+    /** 학부모 타임라인: 최신순, before 커서 이전 */
+    fun findEvents(studentIds: Collection<StudentId>, before: Instant?, limit: Int): List<AttendanceEvent>
+}
+
+interface DeviceTokenPort {
+    fun upsert(token: DeviceToken)
+    fun findByUsers(userIds: Collection<UserId>, flavor: AppFlavor): List<DeviceToken>
+    fun deleteTokens(tokens: Collection<String>)
+}

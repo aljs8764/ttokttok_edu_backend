@@ -1,0 +1,17 @@
+# 로컬 개발용: PostgreSQL 16 + Redis 7
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ttok
+      POSTGRES_PASSWORD: ttok
+      POSTGRES_DB: ttok
+    ports: ["5432:5432"]
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+volumes:
+  pg-data:

@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: ttok-worker
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ttok}
+    username: ${DB_USERNAME:ttok}
+    password: ${DB_PASSWORD:ttok}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: always
+    serialization:
+      write-dates-as-timestamps: false
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${PORT:8081}
+  shutdown: graceful
+
+management:
+  endpoints.web.exposure.include: health,info,metrics
+
+ttok:
+  jwt:
+    # 운영은 Secrets Manager 주입. 로컬 기본값은 개발 전용
+    secret: ${JWT_SECRET:ZGV2LW9ubHktand0LXNlY3JldC1jaGFuZ2UtbWUtMzJieXRlcyEh}
+  crypto:
+    encryption-key: ${CRYPTO_ENCRYPTION_KEY:ZGV2LW9ubHktZW5jcnlwdGlvbi1rZXktMzJieXRlcyE=}
+    hash-key: ${CRYPTO_HASH_KEY:ZGV2LW9ubHktaGFzaGluZy1rZXktMzItYnl0ZXMhISE=}
+  push:
+    mode: ${PUSH_MODE:log}   # log | fcm (워커가 실제 발송)
+    fcm:
+      credentials-path: ${FCM_CREDENTIALS_PATH:}
+  outbox:
+    poll-interval-ms: 500
+  scheduler:
+    enabled: true

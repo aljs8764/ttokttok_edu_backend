@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/ttok_test}
+    username: ${TEST_DB_USERNAME:ttok}
+    password: ${TEST_DB_PASSWORD:ttok}
+ttok:
+  scheduler:
+    enabled: false
+  push:
+    mode: log
