@@ -228,6 +228,11 @@ class AttendancePersistenceAdapter(
     override fun findDayForUpdate(studentId: StudentId, classroomId: ClassroomId, date: LocalDate) =
         days.findForUpdate(studentId.value, classroomId.value, date)?.toDomain()
     override fun findDays(classroomId: ClassroomId, date: LocalDate) = days.findByClassroomIdAndDate(classroomId.value, date).map { it.toDomain() }
+    override fun findDaysByInstitution(institutionId: InstitutionId, date: LocalDate) =
+        days.findByInstitutionIdAndDate(institutionId.value, date).map { it.toDomain() }
+    override fun findDaysByDate(date: LocalDate) = days.findByDate(date).map { it.toDomain() }
+    override fun findDaysInRange(classroomId: ClassroomId, from: LocalDate, to: LocalDate) =
+        days.findByClassroomIdAndDateBetween(classroomId.value, from, to).map { it.toDomain() }
     override fun findDayById(id: AttendanceDayId) = days.findByIdOrNull(id.value)?.toDomain()
     override fun findDaysByIds(ids: Collection<AttendanceDayId>) = if (ids.isEmpty()) emptyList() else days.findAllById(ids.map { it.value }).map { it.toDomain() }
 
@@ -236,6 +241,7 @@ class AttendancePersistenceAdapter(
             AttendanceDayEntity(
                 day.id.value, day.institutionId.value, day.studentId.value, day.classroomId.value, day.date, day.status.name,
                 day.isLate, day.isEarlyLeave, day.checkInAt, day.checkOutAt, day.nextDestinationId?.value, Instant.now(),
+                absenceReason = day.absenceReason,
             ),
         )
         return day
@@ -269,9 +275,16 @@ class AttendancePersistenceAdapter(
         return rows.map { it.toDomain() }
     }
 
+    override fun findRecentEvents(institutionId: InstitutionId, classroomIds: Set<ClassroomId>?, limit: Int): List<AttendanceEvent> = when {
+        classroomIds == null -> events.findByInstitutionIdOrderByOccurredAtDesc(institutionId.value, PageRequest.of(0, limit))
+        classroomIds.isEmpty() -> emptyList()
+        else -> events.findRecentInClassrooms(institutionId.value, classroomIds.map { it.value }, limit)
+    }.map { it.toDomain() }
+
     private fun AttendanceDayEntity.toDomain() = AttendanceDay(
         AttendanceDayId(id), InstitutionId(institutionId), StudentId(studentId), ClassroomId(classroomId), date,
         AttendanceStatus.valueOf(status), isLate, isEarlyLeave, checkInAt, checkOutAt, nextDestinationId?.let { DestinationId(it) },
+        absenceReason,
     )
 
     private fun AttendanceEventEntity.toDomain() = AttendanceEvent(

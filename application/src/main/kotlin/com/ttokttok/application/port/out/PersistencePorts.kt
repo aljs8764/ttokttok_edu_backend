@@ -105,6 +105,12 @@ interface AttendancePort {
     /** 같은 학생·반·날짜 행을 행 잠금(FOR UPDATE)으로 조회 — 더블 터치 동시성 방지 */
     fun findDayForUpdate(studentId: StudentId, classroomId: ClassroomId, date: LocalDate): AttendanceDay?
     fun findDays(classroomId: ClassroomId, date: LocalDate): List<AttendanceDay>
+    /** 대시보드·데일리 리포트: 기관의 해당 날짜 전체 */
+    fun findDaysByInstitution(institutionId: InstitutionId, date: LocalDate): List<AttendanceDay>
+    /** 23:50 통계 집계: 전 기관 */
+    fun findDaysByDate(date: LocalDate): List<AttendanceDay>
+    /** 월간 출석부: 반의 기간(양 끝 포함) */
+    fun findDaysInRange(classroomId: ClassroomId, from: LocalDate, to: LocalDate): List<AttendanceDay>
     fun findDayById(id: AttendanceDayId): AttendanceDay?
     fun findDaysByIds(ids: Collection<AttendanceDayId>): List<AttendanceDay>
     fun saveDay(day: AttendanceDay): AttendanceDay
@@ -115,6 +121,8 @@ interface AttendancePort {
     fun findEventByIdempotencyKey(institutionId: InstitutionId, key: String): AttendanceEvent?
     /** 학부모 타임라인: 최신순, before 커서 이전 */
     fun findEvents(studentIds: Collection<StudentId>, before: Instant?, limit: Int): List<AttendanceEvent>
+    /** 관리자 대시보드 실시간 타임라인 (DASH-002): 기관 최신순. classroomIds가 null이면 전체 반 */
+    fun findRecentEvents(institutionId: InstitutionId, classroomIds: Set<ClassroomId>?, limit: Int): List<AttendanceEvent>
 }
 
 interface DeviceTokenPort {

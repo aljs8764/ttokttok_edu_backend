@@ -52,4 +52,5 @@ data class AttendanceView(
     val checkOutAt: Instant?,
     val nextDestinationId: DestinationId?,
     val nextDestinationName: String?,
+    val absenceReason: String? = null,
 )

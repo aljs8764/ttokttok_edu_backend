@@ -1,4 +1,4 @@
-# 똑똑(Ttok-Ttok) Backend — Phase1 (S1–S4)
+# 똑똑(Ttok-Ttok) Backend — Phase1 (S1–S6)
 
 > 교사가 [하원(목적지)]을 누르면 학부모가 즉시 푸시를 받고 통합 타임라인에서 확인한다.
 
@@ -96,6 +96,22 @@ docker compose up -d                          # postgres(ttok, ttok_test) + redi
 | POST | /api/v1/auth/password/temp | 공개 | AUTH-004 임시 비밀번호 메일 (존재 여부 비노출, 항상 202) |
 | PUT | /api/v1/auth/password | 로그인 | AUTH-005 비밀번호 변경 |
 
+## S5–6 API (출결 관리·대시보드)
+
+| Method | Path | 권한 | 기능 |
+| --- | --- | --- | --- |
+| POST | /api/v1/attendance/bulk | 담당 교사·ADMIN+ | ATT-005~006 오프라인 큐 일괄(최대 100건). 항목별 `{index, ok, attendance, errorCode}`, clientAt 순으로 처리 |
+| PATCH | /api/v1/attendance/{dayId}/status | 담당 교사·ADMIN+ | ATT-002 수동 변경 `{status, reason*, isLate?, isEarlyLeave?, source?}` — 이벤트 로그 + 감사 로그, 학부모 푸시 없음 |
+| PATCH | /api/v1/attendance/{dayId}/absence-reason | 담당 교사·ADMIN+ | ATT-003 결석 사유 등록·수정(결석일 때만) |
+| GET | /api/v1/attendance/report?date&classId? | 교직원 | ATT-001 데일리 리포트 — 반별 집계 + 원생 행(`dayId` 포함) |
+| GET | /api/v1/attendance/monthly?month=YYYY-MM&classId | 담당 교사·ADMIN+ | ATT-003 월간 출석부 O/△/X, 출석·지각조퇴·결석 일수, 비고 |
+| POST | /api/v1/attendance/export | ADMIN+ | ATT-004 출석부 엑셀 `{classId, month, password?}` — 비밀번호 시 AES(Agile) 암호화, 다운로드 감사 로그 |
+| GET | /api/v1/dashboard/today | 교직원 | DASH-001 KPI(등원율·미등원·결석·지각) + DASH-005 위젯(미등원·지각·결석 명단) |
+| GET | /api/v1/dashboard/timeline?limit=20 | 교직원 | DASH-002 실시간 타임라인(최신순, 행위자 이름). 갱신은 STOMP `/topic/inst.{id}` 수신 후 재조회 |
+
+교사는 대시보드·리포트를 담당 반 범위로만 본다. 등원율 = (등원+하원) ÷ (출결 행 − 사유 등록된 결석) × 100.
+23:50 배치는 미처리 결석 확정 후 `daily_attendance_stat`(반·일 집계)을 갱신한다.
+
 개인정보 저장 규칙: 초대·가입요청·업로드 작업·Outbox 페이로드의 연락처는 모두 AES-256-GCM 암호문으로 저장한다.
 
 업무 API는 `Authorization: Bearer {access}` + `X-Institution-Id` 헤더를 쓴다. 오류 형식은 `{code, message, details}`.
@@ -108,3 +124,4 @@ docker compose up -d                          # postgres(ttok, ttok_test) + redi
 - STOMP Redis 브로커 릴레이(서버 다중화), QueryDSL(조회 전용 Query Port)
 - 알림톡·SES 실제 발송 어댑터 (현재 log 모드), 감사 로그(audit_log)
 - 엑셀 업로드 중복 검사는 기관 전체 원생을 읽어 비교 — 원생 수천 명 규모가 되면 해시 컬럼 조회로 교체
+- S5–6: 교육청 출석부 실제 양식(Open Issue #5) 확보 후 `PoiAttendanceRegisterAdapter` 레이아웃 교체, 결석 증빙 파일 첨부(S3 저장소), KPI Redis 카운터·공지 열람률(알림장 스프린트), 대형 기관용 비동기 엑셀 job

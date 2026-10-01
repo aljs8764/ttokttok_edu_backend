@@ -40,4 +40,11 @@ class AccessGuard(
         if (!m.role.isManager && !classroom.isTaughtBy(actor)) throw ForbiddenException("담당 반이 아닙니다")
         return classroom
     }
+
+    /** 대시보드·리포트 범위: 관리자는 전체 반, 교사는 담당 반 */
+    fun visibleClassrooms(actor: UserId, institutionId: InstitutionId): List<Classroom> {
+        val m = requireStaff(actor, institutionId)
+        val all = classrooms.findByInstitution(institutionId)
+        return if (m.role.isManager) all else all.filter { it.isTaughtBy(actor) }
+    }
 }

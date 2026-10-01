@@ -81,6 +81,12 @@ interface AttendanceDayJpaRepository : JpaRepository<AttendanceDayEntity, UUID> 
 
     fun findByClassroomIdAndDate(classroomId: UUID, date: LocalDate): List<AttendanceDayEntity>
 
+    fun findByInstitutionIdAndDate(institutionId: UUID, date: LocalDate): List<AttendanceDayEntity>
+
+    fun findByDate(date: LocalDate): List<AttendanceDayEntity>
+
+    fun findByClassroomIdAndDateBetween(classroomId: UUID, from: LocalDate, to: LocalDate): List<AttendanceDayEntity>
+
     fun findByStatusAndDateLessThanEqual(status: String, date: LocalDate): List<AttendanceDayEntity>
 
     @Modifying
@@ -103,6 +109,19 @@ interface AttendanceEventJpaRepository : JpaRepository<AttendanceEventEntity, UU
 
     fun findByStudentIdInAndOccurredAtBeforeOrderByOccurredAtDesc(
         studentIds: Collection<UUID>, before: Instant, pageable: Pageable,
+    ): List<AttendanceEventEntity>
+
+    fun findByInstitutionIdOrderByOccurredAtDesc(institutionId: UUID, pageable: Pageable): List<AttendanceEventEntity>
+
+    @Query(
+        value = """select e.* from attendance_event e
+                   join attendance_day d on d.id = e.attendance_day_id
+                   where e.institution_id = :institutionId and d.classroom_id in (:classroomIds)
+                   order by e.occurred_at desc limit :limit""",
+        nativeQuery = true,
+    )
+    fun findRecentInClassrooms(
+        @Param("institutionId") institutionId: UUID, @Param("classroomIds") classroomIds: Collection<UUID>, @Param("limit") limit: Int,
     ): List<AttendanceEventEntity>
 }
 

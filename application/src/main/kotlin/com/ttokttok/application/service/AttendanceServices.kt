@@ -166,6 +166,7 @@ class DailyAttendanceBatchService(
     private val enrollments: EnrollmentPort,
     private val students: StudentPort,
     private val attendance: AttendancePort,
+    private val stats: com.ttokttok.application.port.out.DailyAttendanceStatPort,
     private val clock: ClockPort,
 ) : DailyAttendanceBatchUseCase {
 
@@ -195,15 +196,33 @@ class DailyAttendanceBatchService(
             }
         }
         // 자동 결석은 학부모 푸시 대상이 아님(학부모 사전 신청 기능은 Phase2)
+        aggregate(date)
         return closed
     }
+
+    private fun aggregate(date: LocalDate) {
+        stats.upsert(aggregateDays(attendance.findDaysByDate(date), date))
+    }
 }
+
+/** 23:50 마감 직후 반·일 단위 집계 (DASH-001 이력, Phase2 STAT) — 재실행 시 덮어쓴다 */
+internal fun aggregateDays(days: List<AttendanceDay>, date: LocalDate) =
+    days.groupBy { it.institutionId to it.classroomId }.map { (key, list) ->
+        val attended = list.filter { it.status == com.ttokttok.domain.attendance.AttendanceStatus.IN || it.status == com.ttokttok.domain.attendance.AttendanceStatus.OUT }
+        com.ttokttok.application.port.out.DailyAttendanceStat(
+            institutionId = key.first, classroomId = key.second, date = date,
+            scheduled = list.size, present = attended.size,
+            late = attended.count { it.isLate }, earlyLeave = attended.count { it.isEarlyLeave },
+            absent = list.count { it.status == com.ttokttok.domain.attendance.AttendanceStatus.ABSENT },
+        )
+    }
 
 internal fun toAttendanceView(day: AttendanceDay, studentName: String, destination: Destination?) = AttendanceView(
     dayId = day.id, studentId = day.studentId, studentName = studentName, classroomId = day.classroomId, date = day.date,
     status = day.status, isLate = day.isLate, isEarlyLeave = day.isEarlyLeave,
     checkInAt = day.checkInAt, checkOutAt = day.checkOutAt,
     nextDestinationId = day.nextDestinationId, nextDestinationName = destination?.name,
+    absenceReason = day.absenceReason,
 )
 
 internal fun AttendanceView.toPayload(): Map<String, Any?> = mapOf(

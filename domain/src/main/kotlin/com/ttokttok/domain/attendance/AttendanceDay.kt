@@ -24,7 +24,7 @@ enum class AttendanceEventType { CHECK_IN, CHECK_OUT, STATUS_CHANGE }
 enum class AttendanceSource { TEACHER_APP, ADMIN_WEB, SYSTEM }
 
 /** 월간 출석부 표기 (ATT-003): O 출석, △ 지각·조퇴, X 결석 */
-enum class MonthlyMark { O, TRIANGLE, X, NONE }
+enum class MonthlyMark(val symbol: String) { O("O"), TRIANGLE("△"), X("X"), NONE("") }
 
 data class AttendanceDay(
     val id: AttendanceDayId,
@@ -38,6 +38,8 @@ data class AttendanceDay(
     val checkInAt: Instant? = null,
     val checkOutAt: Instant? = null,
     val nextDestinationId: DestinationId? = null,
+    /** 결석 사유 (ATT-003). 사유가 등록된 결석은 "사전 연락 결석"으로 보고 등원율 분모에서 뺀다 */
+    val absenceReason: String? = null,
 ) {
     val monthlyMark: MonthlyMark
         get() = when (status) {
@@ -62,12 +64,47 @@ data class AttendanceDay(
         return Transition(next, event(AttendanceEventType.CHECK_OUT, AttendanceStatus.OUT, at, actor, source, null, destination))
     }
 
-    /** 수동 강제 변경 (ATT-002). 어떤 전이든 가능하지만 사유는 필수. */
-    fun overrideStatus(to: AttendanceStatus, reason: String, at: Instant, actor: UserId): Transition {
-        if (reason.isBlank()) throw InvalidInputException("REASON_REQUIRED", "수동 변경 사유는 필수입니다")
+    /**
+     * 수동 강제 변경 (ATT-002). 원터치로 허용되지 않는 전이(OUT→IN, ABSENT→IN 등)와
+     * 지각·조퇴 플래그 정정을 여기서 처리한다. 사유는 필수이고 이벤트 로그에 남는다.
+     * isLate / isEarlyLeave 를 null 로 주면 기존 값을 유지한다.
+     */
+    fun overrideStatus(
+        to: AttendanceStatus, reason: String, at: Instant, actor: UserId,
+        source: AttendanceSource = AttendanceSource.ADMIN_WEB,
+        isLate: Boolean? = null, isEarlyLeave: Boolean? = null,
+    ): Transition {
+        val trimmed = reason.trim()
+        if (trimmed.isEmpty()) throw InvalidInputException("REASON_REQUIRED", "수동 변경 사유는 필수입니다")
+        if (trimmed.length > MAX_REASON) throw InvalidInputException("REASON_TOO_LONG", "사유는 ${MAX_REASON}자 이내입니다")
         if (to == AttendanceStatus.SCHEDULED) throw InvalidInputException("INVALID_STATUS", "예정 상태로는 변경할 수 없습니다")
-        val next = copy(status = to)
-        return Transition(next, event(AttendanceEventType.STATUS_CHANGE, to, at, actor, AttendanceSource.ADMIN_WEB, reason, null))
+
+        val attended = status == AttendanceStatus.IN || status == AttendanceStatus.OUT
+        val next = when (to) {
+            AttendanceStatus.ABSENT -> copy(
+                status = to, isLate = false, isEarlyLeave = false, checkInAt = null, checkOutAt = null,
+                nextDestinationId = null, absenceReason = trimmed,
+            )
+            AttendanceStatus.IN -> copy(
+                status = to, isLate = isLate ?: (attended && this.isLate), isEarlyLeave = false,
+                checkInAt = checkInAt ?: at, checkOutAt = null, nextDestinationId = null, absenceReason = null,
+            )
+            AttendanceStatus.OUT -> copy(
+                status = to, isLate = isLate ?: (attended && this.isLate), isEarlyLeave = isEarlyLeave ?: (status == AttendanceStatus.OUT && this.isEarlyLeave),
+                checkInAt = checkInAt ?: at, checkOutAt = checkOutAt ?: at, absenceReason = null,
+            )
+            AttendanceStatus.SCHEDULED -> error("unreachable")
+        }
+        if (next == this) throw ConflictException("NO_CHANGE", "변경할 내용이 없습니다")
+        return Transition(next, event(AttendanceEventType.STATUS_CHANGE, to, at, actor, source, trimmed, null))
+    }
+
+    /** 결석 사유 등록·수정 (ATT-003 월간 출석부). 결석일 때만 가능 */
+    fun withAbsenceReason(reason: String?): AttendanceDay {
+        if (status != AttendanceStatus.ABSENT) throw ConflictException("NOT_ABSENT", "결석인 날에만 사유를 등록할 수 있습니다")
+        val r = reason?.trim()?.takeIf { it.isNotEmpty() }
+        if ((r?.length ?: 0) > MAX_REASON) throw InvalidInputException("REASON_TOO_LONG", "사유는 ${MAX_REASON}자 이내입니다")
+        return copy(absenceReason = r)
     }
 
     /** 23:50 배치: 아무 처리도 없던 예정 건을 결석으로 확정 */
@@ -90,6 +127,8 @@ data class AttendanceDay(
         ConflictException("INVALID_TRANSITION", "현재 상태(${status})에서 ${to}(으)로 바로 변경할 수 없습니다. 수동 변경을 이용하세요")
 
     data class Transition(val day: AttendanceDay, val event: AttendanceEvent)
+
+    companion object { const val MAX_REASON = 500 }
 }
 
 /** 지각·조퇴 판정 기준 (반 시간표 + 기관 설정). */

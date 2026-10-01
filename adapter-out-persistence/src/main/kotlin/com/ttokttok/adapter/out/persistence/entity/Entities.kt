@@ -121,6 +121,7 @@ class AttendanceDayEntity(
     var checkOutAt: Instant?,
     var nextDestinationId: UUID?,
     var updatedAt: Instant = Instant.now(),
+    var absenceReason: String? = null,
 )
 
 @Entity @Table(name = "attendance_event")

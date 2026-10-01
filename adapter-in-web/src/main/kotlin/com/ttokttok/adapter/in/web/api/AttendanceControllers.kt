@@ -37,11 +37,15 @@ data class AttendanceResponse(
     val studentId: UUID, val studentName: String, val classroomId: UUID, val date: LocalDate,
     val status: String, val isLate: Boolean, val isEarlyLeave: Boolean,
     val checkInAt: Instant?, val checkOutAt: Instant?, val nextDestinationId: UUID?, val nextDestinationName: String?,
+    /** 출결 행 id — 수동 변경(PATCH /attendance/{dayId}/status)에 쓴다. 아직 행이 없으면 null */
+    val dayId: UUID? = null,
+    val absenceReason: String? = null,
 )
 
 internal fun AttendanceView.toResponse() = AttendanceResponse(
     studentId.value, studentName, classroomId.value, date, status.name, isLate, isEarlyLeave,
     checkInAt, checkOutAt, nextDestinationId?.value, nextDestinationName,
+    dayId?.value, absenceReason,
 )
 
 @RestController
