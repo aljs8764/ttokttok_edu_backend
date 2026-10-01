@@ -57,4 +57,6 @@ interface NotificationLogPort {
 /** 실시간 브로드캐스트. 구현체는 트랜잭션 커밋 이후에 전송해야 한다. */
 interface RealtimePort {
     fun attendanceUpdated(institutionId: InstitutionId, classroomId: ClassroomId, payload: Map<String, Any?>)
+    /** 기관 토픽(/topic/inst.{id})으로만 보내는 이벤트 — notice.read 등. 워커처럼 소켓이 없는 곳은 무시 */
+    fun institutionEvent(institutionId: InstitutionId, payload: Map<String, Any?>) = Unit
 }

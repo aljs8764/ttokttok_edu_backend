@@ -114,7 +114,7 @@ data class DashboardToday(
     val counts: AttendanceCounts,
     val excusedAbsent: Int,
     val notArrivedCount: Int,
-    /** 알림장(NTC) 스프린트에서 채움. 그 전까지 null */
+    /** 최근 24시간 발송 알림장 열람률 평균(%). 발송 건이 없으면 null */
     val noticeReadRate: Double?,
     val notArrived: List<DashboardStudentItem>,
     val late: List<DashboardStudentItem>,

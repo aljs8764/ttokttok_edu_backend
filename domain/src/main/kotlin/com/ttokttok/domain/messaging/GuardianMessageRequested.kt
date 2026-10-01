@@ -15,6 +15,8 @@ enum class MessageTemplate(val code: String) {
     JOIN_APPROVED("TTOK_JOIN_APPROVED"),
     /** STU-004 가입 거절 */
     JOIN_REJECTED("TTOK_JOIN_REJECTED"),
+    /** NTC-001·009 앱 미설치 보호자에게 알림장·공지 도착 안내 (설치 링크 포함) */
+    NOTICE_NEW("TTOK_NOTICE_NEW"),
 }
 
 /**

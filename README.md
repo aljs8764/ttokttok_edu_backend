@@ -1,4 +1,4 @@
-# 똑똑(Ttok-Ttok) Backend — Phase1 (S1–S6)
+# 똑똑(Ttok-Ttok) Backend — Phase1 (S1–S8)
 
 > 교사가 [하원(목적지)]을 누르면 학부모가 즉시 푸시를 받고 통합 타임라인에서 확인한다.
 
@@ -112,6 +112,25 @@ docker compose up -d                          # postgres(ttok, ttok_test) + redi
 교사는 대시보드·리포트를 담당 반 범위로만 본다. 등원율 = (등원+하원) ÷ (출결 행 − 사유 등록된 결석) × 100.
 23:50 배치는 미처리 결석 확정 후 `daily_attendance_stat`(반·일 집계)을 갱신한다.
 
+## S7–8 API (알림장·전체 공지)
+
+| Method | Path | 권한 | 기능 |
+| --- | --- | --- | --- |
+| POST | /api/v1/notices | 교직원 | NTC-001 작성·즉시 발송 / NTC-002 예약(`sendAt`, 30일 이내) / NTC-009 전체 공지(`kind=ANNOUNCEMENT`, 원장·실장) |
+| GET | /api/v1/notices?kind&status&page&size | 교직원 | NTC-004 발송 이력 + 열람 통계 (교사는 본인 작성분) |
+| GET/PATCH | /api/v1/notices/{id} | 작성자·ADMIN+ | 상세 · 예약 건 수정 |
+| POST | /api/v1/notices/{id}/cancel | 작성자·ADMIN+ | 예약 취소 |
+| GET | /api/v1/notices/{id}/receipts | 작성자·ADMIN+ | NTC-005 원생별 열람(미열람 먼저)·보호자별 도달/열람 시각 |
+| POST | /api/v1/notices/{id}/resend-unread | 작성자·ADMIN+ | NTC-006 미열람 보호자에게만 재푸시 (30분 쿨타임) |
+| GET | /api/v1/me/notices?childId&before&limit | 학부모 | PAR-004 알림장함 (전 기관, 커서 = sentAt) |
+| GET | /api/v1/me/notices/{id} | 학부모 | 상세 |
+| POST | /api/v1/me/notices/{id}/read | 학부모 | 열람 처리 (최초 진입 시각 기록) → STOMP `notice.read` |
+
+대상(`targets`)은 `{scope: ALL|CLASS|STUDENT, id}` 목록. 교사는 담당 반·담당 반 원생만, 전체 대상은 원장·실장만.
+발송 시점에 대상을 학생 × 연결 보호자 계정으로 펼쳐 `notice_recipient` 스냅샷을 만든다(이후 반 이동과 무관).
+앱 미연결 학생의 보호자에게는 알림톡(`TTOK_NOTICE_NEW`)으로 안내한다. 열람률은 학생 기준(보호자 중 한 명이라도 읽으면 열람).
+예약 발송은 app-worker가 매분 `FOR UPDATE SKIP LOCKED`로 처리한다. 대시보드 `noticeReadRate`는 최근 24시간 발송분 평균.
+
 개인정보 저장 규칙: 초대·가입요청·업로드 작업·Outbox 페이로드의 연락처는 모두 AES-256-GCM 암호문으로 저장한다.
 
 업무 API는 `Authorization: Bearer {access}` + `X-Institution-Id` 헤더를 쓴다. 오류 형식은 `{code, message, details}`.
@@ -124,4 +143,5 @@ docker compose up -d                          # postgres(ttok, ttok_test) + redi
 - STOMP Redis 브로커 릴레이(서버 다중화), QueryDSL(조회 전용 Query Port)
 - 알림톡·SES 실제 발송 어댑터 (현재 log 모드), 감사 로그(audit_log)
 - 엑셀 업로드 중복 검사는 기관 전체 원생을 읽어 비교 — 원생 수천 명 규모가 되면 해시 컬럼 조회로 교체
+- S7–8: 알림장 사진·파일 첨부(S3 저장소), 학부모 회신(댓글), 미열람 재발송 시 알림톡 대체(옵션), 예약 발송 반복 실패 건 격리
 - S5–6: 교육청 출석부 실제 양식(Open Issue #5) 확보 후 `PoiAttendanceRegisterAdapter` 레이아웃 교체, 결석 증빙 파일 첨부(S3 저장소), KPI Redis 카운터·공지 열람률(알림장 스프린트), 대형 기관용 비동기 엑셀 job

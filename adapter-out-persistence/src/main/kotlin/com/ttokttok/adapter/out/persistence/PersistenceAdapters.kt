@@ -198,6 +198,8 @@ class GuardianPersistenceAdapter(private val repo: GuardianJpaRepository, privat
         return guardian
     }
     override fun findByStudent(studentId: StudentId) = repo.findByStudentId(studentId.value).map { it.toDomain() }
+    override fun findByStudents(studentIds: Collection<StudentId>) =
+        if (studentIds.isEmpty()) emptyList() else studentIds.map { it.value }.chunked(1000).flatMap { repo.findByStudentIdIn(it) }.map { it.toDomain() }
     override fun findByPhone(phone: PhoneNumber) = repo.findByPhoneHash(crypto.hash(phone.digits)).map { it.toDomain() }
     override fun find(id: GuardianId, institutionId: InstitutionId) = repo.findByIdAndInstitutionId(id.value, institutionId.value)?.toDomain()
     override fun findLinkedByUser(userId: UserId) =

@@ -24,6 +24,10 @@ class StompRealtimeAdapter(private val template: SimpMessagingTemplate) : Realti
         }
     }
 
+    override fun institutionEvent(institutionId: InstitutionId, payload: Map<String, Any?>) {
+        afterCommit { template.convertAndSend("/topic/inst.${institutionId.value}", payload) }
+    }
+
     private fun afterCommit(action: () -> Unit) {
         val safe = { runCatching(action).onFailure { log.warn("실시간 전송 실패: {}", it.message) } }
         if (TransactionSynchronizationManager.isSynchronizationActive()) {

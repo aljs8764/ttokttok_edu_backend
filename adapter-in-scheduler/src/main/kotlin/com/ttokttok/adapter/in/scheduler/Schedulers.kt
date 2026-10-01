@@ -2,6 +2,7 @@ package com.ttokttok.adapter.`in`.scheduler
 
 import com.ttokttok.application.port.`in`.DailyAttendanceBatchUseCase
 import com.ttokttok.application.port.`in`.ProcessOutboxUseCase
+import com.ttokttok.application.port.`in`.PublishDueNoticesUseCase
 import com.ttokttok.application.port.out.ClockPort
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock
@@ -50,5 +51,19 @@ class DailyAttendanceScheduler(
     fun close() {
         val n = batch.closeUnprocessed(clock.today())
         log.info("미처리 {}건 결석 확정", n)
+    }
+}
+
+/**
+ * 예약 알림장 발송 (NTC-002). 매분, 발송 시각이 지난 SCHEDULED 건을 SKIP LOCKED 로 잡아 발송한다.
+ * 워커가 여러 대여도 같은 건을 두 번 잡지 않으므로 ShedLock 불필요.
+ */
+@Component
+@ConditionalOnProperty(name = ["ttok.scheduler.enabled"], havingValue = "true", matchIfMissing = true)
+class NoticeScheduler(private val publishDue: PublishDueNoticesUseCase) {
+    @Scheduled(fixedDelayString = "\${ttok.notice.poll-interval-ms:60000}")
+    fun publish() {
+        // 한 트랜잭션에 10건씩 — 실패가 다른 건 발송을 오래 막지 않도록
+        while (publishDue.publishDue(10) == 10) Unit
     }
 }

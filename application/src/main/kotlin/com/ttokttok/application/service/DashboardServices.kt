@@ -37,6 +37,7 @@ class DashboardService(
     private val students: StudentPort,
     private val destinations: DestinationPort,
     private val users: UserPort,
+    private val noticeReadRate: NoticeReadRateCalculator,
     private val clock: ClockPort,
 ) : DashboardQuery {
 
@@ -70,7 +71,10 @@ class DashboardService(
         return DashboardToday(
             date = date, asOf = now, counts = kpi.toCounts(),
             excusedAbsent = kpi.excusedAbsent, notArrivedCount = kpi.notArrived.size,
-            noticeReadRate = null,
+            // 교사는 본인이 보낸 알림장 기준
+            noticeReadRate = noticeReadRate.last24h(
+                institutionId, if (guard.requireStaff(actor, institutionId).role.isManager) null else actor, now,
+            ),
             // 미등원은 오래 기다린 순, 지각은 많이 늦은 순
             notArrived = kpi.notArrived.map(::item).sortedByDescending { it.minutesLate ?: 0 },
             late = kpi.lateDays.map(::item).sortedByDescending { it.minutesLate ?: 0 },

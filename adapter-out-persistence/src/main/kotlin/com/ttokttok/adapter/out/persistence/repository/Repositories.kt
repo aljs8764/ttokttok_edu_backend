@@ -62,6 +62,7 @@ interface EnrollmentJpaRepository : JpaRepository<EnrollmentEntity, Long> {
 
 interface GuardianJpaRepository : JpaRepository<GuardianEntity, UUID> {
     fun findByStudentId(studentId: UUID): List<GuardianEntity>
+    fun findByStudentIdIn(studentIds: Collection<UUID>): List<GuardianEntity>
     fun findByPhoneHash(phoneHash: String): List<GuardianEntity>
     fun findByUserId(userId: UUID): List<GuardianEntity>
     fun findByIdAndInstitutionId(id: UUID, institutionId: UUID): GuardianEntity?

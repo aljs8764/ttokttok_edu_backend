@@ -21,6 +21,7 @@ import com.ttokttok.application.port.out.StudentPort
 import com.ttokttok.domain.attendance.AttendanceChanged
 import com.ttokttok.domain.common.DomainEvent
 import com.ttokttok.domain.messaging.GuardianMessageRequested
+import com.ttokttok.domain.notice.NoticePublished
 import com.ttokttok.domain.common.ForbiddenException
 import com.ttokttok.domain.common.InvalidInputException
 import com.ttokttok.domain.common.StudentId
@@ -106,6 +107,7 @@ class ProcessOutboxService(
     private val push: SendPushPort,
     private val alimtalk: SendAlimtalkPort,
     private val logs: NotificationLogPort,
+    private val noticeRecipients: com.ttokttok.application.port.out.NoticeRecipientPort,
     private val clock: ClockPort,
 ) : ProcessOutboxUseCase {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -131,6 +133,7 @@ class ProcessOutboxService(
     private fun handle(event: DomainEvent) = when (event) {
         is AttendanceChanged -> sendAttendancePush(event)
         is GuardianMessageRequested -> sendGuardianMessage(event)
+        is NoticePublished -> sendNoticePush(event)
         else -> error("처리기가 없는 이벤트: ${event::class.simpleName}")
     }
 
@@ -159,6 +162,39 @@ class ProcessOutboxService(
         logs.record(e.institutionId, NotificationChannel.PUSH, TEMPLATE, tokens.size, status, null, clock.now())
         // 유효 토큰이 있었는데 전부 실패 → 재시도 대상
         if (status == NotificationStatus.FAILED && result.invalidTokens.size < tokens.size) error("푸시 발송 실패")
+    }
+
+    /** 알림장·공지 (NTC-001·006·009). FCM 멀티캐스트는 500개 토큰 단위 */
+    private fun sendNoticePush(e: NoticePublished) {
+        val template = if (e.isResend) "NOTICE_RESEND" else "NOTICE_PUBLISHED"
+        val tokens = devices.findByUsers(e.recipientUserIds, AppFlavor.PARENT)
+        if (tokens.isEmpty()) {
+            logs.record(e.institutionId, NotificationChannel.PUSH, template, 0, NotificationStatus.SKIPPED, "등록된 학부모 기기 없음", clock.now())
+            return
+        }
+        var success = 0
+        val invalid = mutableListOf<String>()
+        tokens.map { it.token }.distinct().chunked(500).forEach { batch ->
+            val r = push.send(
+                PushMessage(
+                    tokens = batch, title = e.pushTitle(), body = e.pushBody(),
+                    data = mapOf("type" to "notice", "noticeId" to e.noticeId.value.toString(), "kind" to e.kind.name),
+                ),
+            )
+            success += r.successCount
+            invalid += r.invalidTokens
+        }
+        if (invalid.isNotEmpty()) devices.deleteTokens(invalid)
+        val delivered = tokens.filter { it.token !in invalid }.map { it.userId }.distinct()
+        if (success > 0) noticeRecipients.markDelivered(e.noticeId, delivered, clock.now())
+        val total = tokens.map { it.token }.distinct().size
+        val status = when {
+            success == total -> NotificationStatus.SENT
+            success > 0 -> NotificationStatus.PARTIAL
+            else -> NotificationStatus.FAILED
+        }
+        logs.record(e.institutionId, NotificationChannel.PUSH, template, total, status, null, clock.now())
+        if (status == NotificationStatus.FAILED && invalid.size < total) error("알림장 푸시 발송 실패")
     }
 
     /** 알림톡(대행사가 실패 시 SMS 대체발송) — STU-003/004/005 */

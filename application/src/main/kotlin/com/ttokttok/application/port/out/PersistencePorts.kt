@@ -89,6 +89,7 @@ interface EnrollmentPort {
 interface GuardianPort {
     fun save(guardian: Guardian): Guardian
     fun findByStudent(studentId: StudentId): List<Guardian>
+    fun findByStudents(studentIds: Collection<StudentId>): List<Guardian>
     fun findByPhone(phone: PhoneNumber): List<Guardian>
     fun findLinkedByUser(userId: UserId): List<Guardian>
     fun find(id: com.ttokttok.domain.common.GuardianId, institutionId: InstitutionId): Guardian?
