@@ -23,6 +23,7 @@ import com.ttokttok.domain.common.UserId
 import com.ttokttok.domain.notice.NoticeId
 import com.ttokttok.domain.notice.NoticeKind
 import com.ttokttok.domain.notice.NoticePublished
+import com.ttokttok.domain.messaging.ParentPushRequested
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 import java.time.Instant
@@ -56,6 +57,10 @@ class OutboxPersistenceAdapter(
                 institutionId = event.institutionId.value, institutionName = event.institutionName,
                 noticeId = event.noticeId.value, kind = event.kind.name, title = event.title,
                 recipientUserIds = event.recipientUserIds.map { it.value }, isResend = event.isResend, occurredAt = event.occurredAt,
+            )
+            is ParentPushRequested -> TYPE_PARENT_PUSH to ParentPushV1(
+                institutionId = event.institutionId.value, template = event.template, title = event.title, body = event.body,
+                data = event.data, recipientUserIds = event.recipientUserIds.map { it.value }, occurredAt = event.occurredAt,
             )
             else -> error("Outbox 직렬화 미지원 이벤트: ${event::class.simpleName}")
         }
@@ -100,6 +105,9 @@ class OutboxPersistenceAdapter(
                 it.recipientUserIds.map(::UserId), it.isResend, it.occurredAt,
             )
         }
+        TYPE_PARENT_PUSH -> json.readValue<ParentPushV1>(payload).let {
+            ParentPushRequested(InstitutionId(it.institutionId), it.template, it.title, it.body, it.data, it.recipientUserIds.map(::UserId), it.occurredAt)
+        }
         else -> error("알 수 없는 outbox 이벤트 타입: $type")
     }
 
@@ -117,7 +125,13 @@ class OutboxPersistenceAdapter(
         val recipientUserIds: List<UUID>, val isResend: Boolean, val occurredAt: Instant,
     )
 
+    data class ParentPushV1(
+        val institutionId: UUID, val template: String, val title: String, val body: String,
+        val data: Map<String, String>, val recipientUserIds: List<UUID>, val occurredAt: Instant,
+    )
+
     companion object {
+        const val TYPE_PARENT_PUSH = "parent.push.v1"
         const val TYPE_NOTICE_PUBLISHED = "notice.published.v1"
         const val TYPE_GUARDIAN_MESSAGE = "guardian.message.v1"
         const val TYPE_ATTENDANCE_CHANGED = "attendance.changed.v1"

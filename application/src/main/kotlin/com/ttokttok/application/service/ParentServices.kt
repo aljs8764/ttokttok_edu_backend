@@ -22,6 +22,7 @@ import com.ttokttok.domain.attendance.AttendanceChanged
 import com.ttokttok.domain.common.DomainEvent
 import com.ttokttok.domain.messaging.GuardianMessageRequested
 import com.ttokttok.domain.notice.NoticePublished
+import com.ttokttok.domain.messaging.ParentPushRequested
 import com.ttokttok.domain.common.ForbiddenException
 import com.ttokttok.domain.common.InvalidInputException
 import com.ttokttok.domain.common.StudentId
@@ -134,6 +135,7 @@ class ProcessOutboxService(
         is AttendanceChanged -> sendAttendancePush(event)
         is GuardianMessageRequested -> sendGuardianMessage(event)
         is NoticePublished -> sendNoticePush(event)
+        is ParentPushRequested -> sendParentPush(event)
         else -> error("처리기가 없는 이벤트: ${event::class.simpleName}")
     }
 
@@ -195,6 +197,30 @@ class ProcessOutboxService(
         }
         logs.record(e.institutionId, NotificationChannel.PUSH, template, total, status, null, clock.now())
         if (status == NotificationStatus.FAILED && invalid.size < total) error("알림장 푸시 발송 실패")
+    }
+
+    /** 범용 학부모 푸시 (행사 RSVP 요청·독촉·취소 등) */
+    private fun sendParentPush(e: ParentPushRequested) {
+        val tokens = devices.findByUsers(e.recipientUserIds, AppFlavor.PARENT).map { it.token }.distinct()
+        if (tokens.isEmpty()) {
+            logs.record(e.institutionId, NotificationChannel.PUSH, e.template, 0, NotificationStatus.SKIPPED, "등록된 학부모 기기 없음", clock.now())
+            return
+        }
+        var success = 0
+        val invalid = mutableListOf<String>()
+        tokens.chunked(500).forEach { batch ->
+            val r = push.send(PushMessage(batch, e.title, e.body, e.data))
+            success += r.successCount
+            invalid += r.invalidTokens
+        }
+        if (invalid.isNotEmpty()) devices.deleteTokens(invalid)
+        val status = when {
+            success == tokens.size -> NotificationStatus.SENT
+            success > 0 -> NotificationStatus.PARTIAL
+            else -> NotificationStatus.FAILED
+        }
+        logs.record(e.institutionId, NotificationChannel.PUSH, e.template, tokens.size, status, null, clock.now())
+        if (status == NotificationStatus.FAILED && invalid.size < tokens.size) error("푸시 발송 실패: ${e.template}")
     }
 
     /** 알림톡(대행사가 실패 시 SMS 대체발송) — STU-003/004/005 */

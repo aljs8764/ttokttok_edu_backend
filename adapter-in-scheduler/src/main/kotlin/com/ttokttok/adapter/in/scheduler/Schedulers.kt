@@ -3,6 +3,7 @@ package com.ttokttok.adapter.`in`.scheduler
 import com.ttokttok.application.port.`in`.DailyAttendanceBatchUseCase
 import com.ttokttok.application.port.`in`.ProcessOutboxUseCase
 import com.ttokttok.application.port.`in`.PublishDueNoticesUseCase
+import com.ttokttok.application.port.`in`.RemindEventUseCase
 import com.ttokttok.application.port.out.ClockPort
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock
@@ -65,5 +66,15 @@ class NoticeScheduler(private val publishDue: PublishDueNoticesUseCase) {
     fun publish() {
         // 한 트랜잭션에 10건씩 — 실패가 다른 건 발송을 오래 막지 않도록
         while (publishDue.publishDue(10) == 10) Unit
+    }
+}
+
+/** 행사 RSVP 마감 독촉 (EVT-004). 5분마다, 마감 N시간 전에 들어온 행사를 1회 자동 독촉 */
+@Component
+@ConditionalOnProperty(name = ["ttok.scheduler.enabled"], havingValue = "true", matchIfMissing = true)
+class EventReminderScheduler(private val remind: RemindEventUseCase) {
+    @Scheduled(fixedDelayString = "\${ttok.event.reminder-interval-ms:300000}")
+    fun remindDue() {
+        while (remind.remindDue(20) == 20) Unit
     }
 }
