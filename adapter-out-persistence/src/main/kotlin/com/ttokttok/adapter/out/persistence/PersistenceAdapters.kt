@@ -35,7 +35,9 @@ import com.ttokttok.application.port.out.MembershipPort
 import com.ttokttok.application.port.out.NotificationChannel
 import com.ttokttok.application.port.out.NotificationLogPort
 import com.ttokttok.application.port.out.NotificationStatus
+import com.ttokttok.application.port.out.PageResult
 import com.ttokttok.application.port.out.StudentPort
+import com.ttokttok.application.port.out.StudentSearchCriteria
 import com.ttokttok.application.port.out.UserPort
 import com.ttokttok.domain.attendance.AttendanceDay
 import com.ttokttok.domain.attendance.AttendanceEvent
@@ -68,6 +70,7 @@ import com.ttokttok.domain.user.Membership
 import com.ttokttok.domain.user.Role
 import com.ttokttok.domain.user.User
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Sort
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 import java.time.DayOfWeek
@@ -117,6 +120,7 @@ class MembershipPersistenceAdapter(private val repo: MembershipJpaRepository) : 
     }
     override fun find(userId: UserId, institutionId: InstitutionId) = repo.findByUserIdAndInstitutionId(userId.value, institutionId.value)?.toDomain()
     override fun findByUser(userId: UserId) = repo.findByUserId(userId.value).map { it.toDomain() }
+    override fun findByInstitution(institutionId: InstitutionId) = repo.findByInstitutionId(institutionId.value).map { it.toDomain() }
     private fun MembershipEntity.toDomain() = Membership(MembershipId(id), UserId(userId), InstitutionId(institutionId), Role.valueOf(role), title)
 }
 
@@ -134,6 +138,9 @@ class ClassroomPersistenceAdapter(private val repo: ClassroomJpaRepository) : Cl
     override fun find(id: ClassroomId, institutionId: InstitutionId) = repo.findByIdAndInstitutionIdAndDeletedAtIsNull(id.value, institutionId.value)?.toDomain()
     override fun findByInstitution(institutionId: InstitutionId) = repo.findByInstitutionIdAndDeletedAtIsNull(institutionId.value).map { it.toDomain() }
     override fun findAllHeldOn(date: LocalDate) = repo.findHeldOn(1 shl (date.dayOfWeek.value - 1)).map { it.toDomain() }
+    override fun softDelete(id: ClassroomId, institutionId: InstitutionId, at: Instant) {
+        repo.findByIdAndInstitutionIdAndDeletedAtIsNull(id.value, institutionId.value)?.deletedAt = at
+    }
     private fun ClassroomEntity.toDomain() = Classroom(
         ClassroomId(id), InstitutionId(institutionId), name, capacity, daysMask.toDays(), startTime, endTime, teacherIds.map { UserId(it) }.toSet(),
     )
@@ -142,14 +149,25 @@ class ClassroomPersistenceAdapter(private val repo: ClassroomJpaRepository) : Cl
 @Component
 class StudentPersistenceAdapter(private val repo: StudentJpaRepository, private val crypto: FieldCrypto) : StudentPort {
     override fun save(student: Student): Student {
-        repo.save(StudentEntity(student.id.value, student.institutionId.value, student.name, crypto.encrypt(student.birthDate.toString()), student.grade, student.status.name))
+        repo.save(
+            StudentEntity(
+                student.id.value, student.institutionId.value, student.name, crypto.encrypt(student.birthDate.toString()),
+                student.grade, student.status.name, student.memo,
+            ),
+        )
         return student
     }
     override fun find(id: StudentId, institutionId: InstitutionId) = repo.findByIdAndInstitutionId(id.value, institutionId.value)?.toDomain()
     override fun findAllByIds(ids: Collection<StudentId>) = if (ids.isEmpty()) emptyList() else repo.findAllById(ids.map { it.value }).map { it.toDomain() }
     override fun findByInstitution(institutionId: InstitutionId) = repo.findByInstitutionId(institutionId.value).map { it.toDomain() }
     private fun StudentEntity.toDomain() =
-        Student(StudentId(id), InstitutionId(institutionId), name, LocalDate.parse(crypto.decrypt(birthEnc)), grade, StudentStatus.valueOf(status))
+        Student(StudentId(id), InstitutionId(institutionId), name, LocalDate.parse(crypto.decrypt(birthEnc)), grade, StudentStatus.valueOf(status), memo)
+
+    override fun search(criteria: StudentSearchCriteria): PageResult<Student> {
+        if (criteria.classroomIds?.isEmpty() == true) return PageResult(emptyList(), criteria.page, criteria.size, 0)
+        val page = repo.findAll(StudentSpecs.of(criteria), PageRequest.of(criteria.page, criteria.size, Sort.by("name", "id")))
+        return PageResult(page.content.map { it.toDomain() }, criteria.page, criteria.size, page.totalElements)
+    }
 }
 
 @Component
@@ -160,6 +178,10 @@ class EnrollmentPersistenceAdapter(private val repo: EnrollmentJpaRepository) : 
     }
     override fun findCurrent(studentId: StudentId) = repo.findByStudentIdAndToDateIsNull(studentId.value).map { it.toDomain() }
     override fun findCurrentStudentIds(classroomId: ClassroomId) = repo.findByClassroomIdAndToDateIsNull(classroomId.value).map { StudentId(it.studentId) }
+    override fun close(studentId: StudentId, classroomId: ClassroomId, toDate: LocalDate) {
+        repo.findByStudentIdAndClassroomIdAndToDateIsNull(studentId.value, classroomId.value).forEach { it.toDate = toDate }
+    }
+    override fun findHistory(studentId: StudentId) = repo.findByStudentId(studentId.value).map { it.toDomain() }
     private fun EnrollmentEntity.toDomain() = Enrollment(StudentId(studentId), ClassroomId(classroomId), fromDate, toDate)
 }
 
@@ -177,6 +199,7 @@ class GuardianPersistenceAdapter(private val repo: GuardianJpaRepository, privat
     }
     override fun findByStudent(studentId: StudentId) = repo.findByStudentId(studentId.value).map { it.toDomain() }
     override fun findByPhone(phone: PhoneNumber) = repo.findByPhoneHash(crypto.hash(phone.digits)).map { it.toDomain() }
+    override fun find(id: GuardianId, institutionId: InstitutionId) = repo.findByIdAndInstitutionId(id.value, institutionId.value)?.toDomain()
     override fun findLinkedByUser(userId: UserId) =
         repo.findByUserId(userId.value).filter { it.linkStatus == GuardianLinkStatus.LINKED.name }.map { it.toDomain() }
     private fun GuardianEntity.toDomain() = Guardian(

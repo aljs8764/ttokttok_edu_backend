@@ -15,10 +15,12 @@ import com.ttokttok.application.port.out.NotificationLogPort
 import com.ttokttok.application.port.out.NotificationStatus
 import com.ttokttok.application.port.out.OutboxPort
 import com.ttokttok.application.port.out.PushMessage
+import com.ttokttok.application.port.out.SendAlimtalkPort
 import com.ttokttok.application.port.out.SendPushPort
 import com.ttokttok.application.port.out.StudentPort
 import com.ttokttok.domain.attendance.AttendanceChanged
 import com.ttokttok.domain.common.DomainEvent
+import com.ttokttok.domain.messaging.GuardianMessageRequested
 import com.ttokttok.domain.common.ForbiddenException
 import com.ttokttok.domain.common.InvalidInputException
 import com.ttokttok.domain.common.StudentId
@@ -102,6 +104,7 @@ class ProcessOutboxService(
     private val guardians: GuardianPort,
     private val devices: DeviceTokenPort,
     private val push: SendPushPort,
+    private val alimtalk: SendAlimtalkPort,
     private val logs: NotificationLogPort,
     private val clock: ClockPort,
 ) : ProcessOutboxUseCase {
@@ -127,6 +130,7 @@ class ProcessOutboxService(
 
     private fun handle(event: DomainEvent) = when (event) {
         is AttendanceChanged -> sendAttendancePush(event)
+        is GuardianMessageRequested -> sendGuardianMessage(event)
         else -> error("처리기가 없는 이벤트: ${event::class.simpleName}")
     }
 
@@ -155,6 +159,16 @@ class ProcessOutboxService(
         logs.record(e.institutionId, NotificationChannel.PUSH, TEMPLATE, tokens.size, status, null, clock.now())
         // 유효 토큰이 있었는데 전부 실패 → 재시도 대상
         if (status == NotificationStatus.FAILED && result.invalidTokens.size < tokens.size) error("푸시 발송 실패")
+    }
+
+    /** 알림톡(대행사가 실패 시 SMS 대체발송) — STU-003/004/005 */
+    private fun sendGuardianMessage(e: GuardianMessageRequested) {
+        val ok = alimtalk.send(e.phone, e.template.code, e.variables)
+        logs.record(
+            e.institutionId, NotificationChannel.ALIMTALK, e.template.code, 1,
+            if (ok) NotificationStatus.SENT else NotificationStatus.FAILED, null, clock.now(),
+        )
+        if (!ok) error("알림톡 발송 실패: ${e.template.code}")
     }
 
     companion object {

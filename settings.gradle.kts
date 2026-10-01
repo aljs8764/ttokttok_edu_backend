@@ -8,6 +8,7 @@ include(
     "adapter-out-persistence",
     "adapter-out-notification",
     "adapter-out-realtime",
+    "adapter-out-storage",
     "bootstrap:app-api",
     "bootstrap:app-worker",
 )

@@ -20,6 +20,10 @@ spring:
   threads:
     virtual:
       enabled: true
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 server:
   port: ${PORT:8081}
@@ -35,6 +39,13 @@ ttok:
   crypto:
     encryption-key: ${CRYPTO_ENCRYPTION_KEY:ZGV2LW9ubHktZW5jcnlwdGlvbi1rZXktMzJieXRlcyE=}
     hash-key: ${CRYPTO_HASH_KEY:ZGV2LW9ubHktaGFzaGluZy1rZXktMzItYnl0ZXMhISE=}
+  links:
+    join-base-url: ${JOIN_BASE_URL:https://ttok.app/join/}
+    app-install-url: ${APP_INSTALL_URL:https://ttok.app/download}
+  alimtalk:
+    mode: ${ALIMTALK_MODE:log}
+  email:
+    mode: ${EMAIL_MODE:log}
   push:
     mode: ${PUSH_MODE:log}   # log | fcm (워커가 실제 발송)
     fcm:

@@ -12,9 +12,14 @@ import com.ttokttok.adapter.out.persistence.entity.MembershipEntity
 import com.ttokttok.adapter.out.persistence.entity.NotificationLogEntity
 import com.ttokttok.adapter.out.persistence.entity.OutboxEntity
 import com.ttokttok.adapter.out.persistence.entity.StudentEntity
+import com.ttokttok.adapter.out.persistence.entity.InvitationEntity
+import com.ttokttok.adapter.out.persistence.entity.JoinRequestEntity
+import com.ttokttok.adapter.out.persistence.entity.StudentImportJobEntity
+import com.ttokttok.adapter.out.persistence.entity.StudentStatusHistoryEntity
 import com.ttokttok.adapter.out.persistence.entity.UserEntity
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -32,6 +37,7 @@ interface UserJpaRepository : JpaRepository<UserEntity, UUID> {
 interface MembershipJpaRepository : JpaRepository<MembershipEntity, UUID> {
     fun findByUserIdAndInstitutionId(userId: UUID, institutionId: UUID): MembershipEntity?
     fun findByUserId(userId: UUID): List<MembershipEntity>
+    fun findByInstitutionId(institutionId: UUID): List<MembershipEntity>
 }
 
 interface ClassroomJpaRepository : JpaRepository<ClassroomEntity, UUID> {
@@ -42,7 +48,7 @@ interface ClassroomJpaRepository : JpaRepository<ClassroomEntity, UUID> {
     fun findHeldOn(@Param("bit") dayBit: Int): List<ClassroomEntity>
 }
 
-interface StudentJpaRepository : JpaRepository<StudentEntity, UUID> {
+interface StudentJpaRepository : JpaRepository<StudentEntity, UUID>, JpaSpecificationExecutor<StudentEntity> {
     fun findByIdAndInstitutionId(id: UUID, institutionId: UUID): StudentEntity?
     fun findByInstitutionId(institutionId: UUID): List<StudentEntity>
 }
@@ -50,12 +56,15 @@ interface StudentJpaRepository : JpaRepository<StudentEntity, UUID> {
 interface EnrollmentJpaRepository : JpaRepository<EnrollmentEntity, Long> {
     fun findByStudentIdAndToDateIsNull(studentId: UUID): List<EnrollmentEntity>
     fun findByClassroomIdAndToDateIsNull(classroomId: UUID): List<EnrollmentEntity>
+    fun findByStudentIdAndClassroomIdAndToDateIsNull(studentId: UUID, classroomId: UUID): List<EnrollmentEntity>
+    fun findByStudentId(studentId: UUID): List<EnrollmentEntity>
 }
 
 interface GuardianJpaRepository : JpaRepository<GuardianEntity, UUID> {
     fun findByStudentId(studentId: UUID): List<GuardianEntity>
     fun findByPhoneHash(phoneHash: String): List<GuardianEntity>
     fun findByUserId(userId: UUID): List<GuardianEntity>
+    fun findByIdAndInstitutionId(id: UUID, institutionId: UUID): GuardianEntity?
 }
 
 interface DestinationJpaRepository : JpaRepository<DestinationEntity, UUID> {
@@ -111,3 +120,21 @@ interface DeviceTokenJpaRepository : JpaRepository<DeviceTokenEntity, String> {
 }
 
 interface NotificationLogJpaRepository : JpaRepository<NotificationLogEntity, Long>
+
+interface StudentStatusHistoryJpaRepository : JpaRepository<StudentStatusHistoryEntity, Long> {
+    fun findByStudentId(studentId: UUID): List<StudentStatusHistoryEntity>
+}
+
+interface InvitationJpaRepository : JpaRepository<InvitationEntity, UUID> {
+    fun findByToken(token: String): InvitationEntity?
+}
+
+interface JoinRequestJpaRepository : JpaRepository<JoinRequestEntity, UUID> {
+    fun findByIdAndInstitutionId(id: UUID, institutionId: UUID): JoinRequestEntity?
+    fun findByInstitutionId(institutionId: UUID): List<JoinRequestEntity>
+    fun findByInstitutionIdAndStatus(institutionId: UUID, status: String): List<JoinRequestEntity>
+}
+
+interface StudentImportJobJpaRepository : JpaRepository<StudentImportJobEntity, UUID> {
+    fun findByIdAndInstitutionId(id: UUID, institutionId: UUID): StudentImportJobEntity?
+}

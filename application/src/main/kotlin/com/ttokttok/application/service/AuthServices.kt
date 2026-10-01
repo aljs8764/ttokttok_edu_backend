@@ -95,7 +95,8 @@ class RegisterParentService(
 
 /** 같은 번호로 등록된 보호자 행을 모두 연결하고, 기관별 PARENT 소속을 만든다. 기관·형제 불문. */
 internal fun linkGuardians(parent: User, phone: PhoneNumber, guardians: GuardianPort, memberships: MembershipPort) {
-    guardians.findByPhone(phone).filter { it.userId == null }.forEach { g ->
+    // UNLINKED(관리자가 해제한) 매핑은 재가입으로 되살리지 않는다
+    guardians.findByPhone(phone).filter { it.linkStatus == com.ttokttok.domain.student.GuardianLinkStatus.PENDING }.forEach { g ->
         guardians.save(g.linkTo(parent.id))
         if (memberships.find(parent.id, g.institutionId) == null) {
             memberships.save(Membership(MembershipId.new(), parent.id, g.institutionId, Role.PARENT))

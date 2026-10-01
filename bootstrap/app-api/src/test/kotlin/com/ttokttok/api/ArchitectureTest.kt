@@ -39,7 +39,7 @@ class ArchitectureTest {
 
     @Test
     fun `어댑터끼리는 서로 참조하지 않는다`() {
-        val adapters = listOf("in.web", "in.scheduler", "out.persistence", "out.notification", "out.realtime")
+        val adapters = listOf("in.web", "in.scheduler", "out.persistence", "out.notification", "out.realtime", "out.storage")
         adapters.forEach { me ->
             val others = adapters.filter { it != me }.map { "com.ttokttok.adapter.$it.." }.toTypedArray()
             noClasses().that().resideInAPackage("com.ttokttok.adapter.$me..")

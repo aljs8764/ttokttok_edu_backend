@@ -42,6 +42,7 @@ interface MembershipPort {
     fun save(membership: Membership): Membership
     fun find(userId: UserId, institutionId: InstitutionId): Membership?
     fun findByUser(userId: UserId): List<Membership>
+    fun findByInstitution(institutionId: InstitutionId): List<Membership>
 }
 
 interface ClassroomPort {
@@ -49,6 +50,7 @@ interface ClassroomPort {
     fun find(id: ClassroomId, institutionId: InstitutionId): Classroom?
     fun findByInstitution(institutionId: InstitutionId): List<Classroom>
     fun findAllHeldOn(date: LocalDate): List<Classroom>
+    fun softDelete(id: ClassroomId, institutionId: InstitutionId, at: Instant)
 }
 
 interface StudentPort {
@@ -56,12 +58,32 @@ interface StudentPort {
     fun find(id: StudentId, institutionId: InstitutionId): Student?
     fun findAllByIds(ids: Collection<StudentId>): List<Student>
     fun findByInstitution(institutionId: InstitutionId): List<Student>
+    /** STU-001 목록: 반·상태 필터, 이름/보호자 번호 뒷 4자리 검색, 페이징 */
+    fun search(criteria: StudentSearchCriteria): PageResult<Student>
+}
+
+data class StudentSearchCriteria(
+    val institutionId: InstitutionId,
+    /** null = 전체 반, 빈 집합 = 볼 수 있는 반 없음 */
+    val classroomIds: Set<ClassroomId>?,
+    val status: com.ttokttok.domain.student.StudentStatus?,
+    val keyword: String?,
+    val page: Int,
+    val size: Int,
+)
+
+data class PageResult<T>(val items: List<T>, val page: Int, val size: Int, val totalElements: Long) {
+    val totalPages: Int get() = if (size == 0) 0 else ((totalElements + size - 1) / size).toInt()
+    fun <R> map(f: (T) -> R) = PageResult(items.map(f), page, size, totalElements)
 }
 
 interface EnrollmentPort {
     fun save(enrollment: Enrollment): Enrollment
     fun findCurrent(studentId: StudentId): List<Enrollment>
     fun findCurrentStudentIds(classroomId: ClassroomId): List<StudentId>
+    /** 현재 소속을 종료일로 마감 (반 이동·퇴원) */
+    fun close(studentId: StudentId, classroomId: ClassroomId, toDate: LocalDate)
+    fun findHistory(studentId: StudentId): List<Enrollment>
 }
 
 interface GuardianPort {
@@ -69,6 +91,7 @@ interface GuardianPort {
     fun findByStudent(studentId: StudentId): List<Guardian>
     fun findByPhone(phone: PhoneNumber): List<Guardian>
     fun findLinkedByUser(userId: UserId): List<Guardian>
+    fun find(id: com.ttokttok.domain.common.GuardianId, institutionId: InstitutionId): Guardian?
 }
 
 interface DestinationPort {

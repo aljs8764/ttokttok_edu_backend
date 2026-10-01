@@ -108,7 +108,7 @@ class CoreLoopIntegrationTest {
         student["guardians"][0]["linkStatus"].asText() shouldBe "PENDING"
 
         // 교사는 담당 반 학생만 보고, 생년월일은 마스킹된다
-        val roster = call(HttpMethod.GET, "/api/v1/students?classId=$classId", teacherToken, instId, null).expect(200)
+        val roster = call(HttpMethod.GET, "/api/v1/students?classId=$classId", teacherToken, instId, null).expect(200)["items"]
         roster shouldHaveSizeOf 1
         roster[0]["birthDate"].isNull shouldBe true
 

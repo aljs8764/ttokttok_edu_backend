@@ -14,6 +14,9 @@ import com.ttokttok.domain.attendance.AttendanceEventType
 import com.ttokttok.domain.attendance.AttendanceStatus
 import com.ttokttok.domain.common.DomainEvent
 import com.ttokttok.domain.common.InstitutionId
+import com.ttokttok.domain.common.PhoneNumber
+import com.ttokttok.domain.messaging.GuardianMessageRequested
+import com.ttokttok.domain.messaging.MessageTemplate
 import com.ttokttok.domain.common.StudentId
 import com.ttokttok.domain.common.Uuid7
 import org.springframework.data.repository.findByIdOrNull
@@ -29,6 +32,7 @@ import java.util.UUID
 class OutboxPersistenceAdapter(
     private val repo: OutboxJpaRepository,
     private val clock: ClockPort,
+    private val crypto: FieldCrypto,
 ) : OutboxPort {
     private val json: ObjectMapper = jacksonObjectMapper().registerModule(JavaTimeModule())
 
@@ -40,9 +44,15 @@ class OutboxPersistenceAdapter(
                 type = event.type.name, toStatus = event.toStatus.name, isLate = event.isLate,
                 destinationName = event.destinationName, occurredAt = event.occurredAt,
             )
+            is GuardianMessageRequested -> TYPE_GUARDIAN_MESSAGE to GuardianMessageV1(
+                institutionId = event.institutionId.value, phone = event.phone.digits, template = event.template.name,
+                variables = event.variables, occurredAt = event.occurredAt,
+            )
             else -> error("Outbox 직렬화 미지원 이벤트: ${event::class.simpleName}")
         }
-        repo.save(OutboxEntity(Uuid7.next(), event.institutionId.value, type, json.writeValueAsString(payload), nextAttemptAt = clock.now()))
+        // 이름·연락처가 담기므로 페이로드는 암호화해 {"enc": "..."} 로 저장
+        val sealed = json.writeValueAsString(mapOf("enc" to crypto.encrypt(json.writeValueAsString(payload))))
+        repo.save(OutboxEntity(Uuid7.next(), event.institutionId.value, type, sealed, nextAttemptAt = clock.now()))
     }
 
     override fun lockPending(limit: Int, now: Instant): List<OutboxMessage> =
@@ -60,7 +70,15 @@ class OutboxPersistenceAdapter(
         }
     }
 
-    private fun decode(type: String, payload: String): DomainEvent = when (type) {
+    private fun decode(type: String, stored: String): DomainEvent {
+        val payload = crypto.decrypt(json.readTree(stored).get("enc").asText())
+        return decodePlain(type, payload)
+    }
+
+    private fun decodePlain(type: String, payload: String): DomainEvent = when (type) {
+        TYPE_GUARDIAN_MESSAGE -> json.readValue<GuardianMessageV1>(payload).let {
+            GuardianMessageRequested(InstitutionId(it.institutionId), PhoneNumber.of(it.phone), MessageTemplate.valueOf(it.template), it.variables, it.occurredAt)
+        }
         TYPE_ATTENDANCE_CHANGED -> json.readValue<AttendanceChangedV1>(payload).let {
             AttendanceChanged(
                 InstitutionId(it.institutionId), it.institutionName, StudentId(it.studentId), it.studentName,
@@ -75,7 +93,12 @@ class OutboxPersistenceAdapter(
         val type: String, val toStatus: String, val isLate: Boolean, val destinationName: String?, val occurredAt: Instant,
     )
 
+    data class GuardianMessageV1(
+        val institutionId: UUID, val phone: String, val template: String, val variables: Map<String, String>, val occurredAt: Instant,
+    )
+
     companion object {
+        const val TYPE_GUARDIAN_MESSAGE = "guardian.message.v1"
         const val TYPE_ATTENDANCE_CHANGED = "attendance.changed.v1"
     }
 }

@@ -1,6 +1,7 @@
 package com.ttokttok.application.port.`in`
 
 import com.ttokttok.domain.common.ClassroomId
+import com.ttokttok.domain.common.GuardianId
 import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.StudentId
 import com.ttokttok.domain.common.UserId
@@ -14,13 +15,10 @@ interface RegisterStudentUseCase {
     data class Command(
         val actor: UserId, val institutionId: InstitutionId, val name: String, val birthDate: LocalDate,
         val grade: String?, val classroomId: ClassroomId, val guardians: List<GuardianInput>,
+        val memo: String? = null, val sendInstallGuide: Boolean = true,
     )
     data class GuardianInput(val phone: String, val relation: String?, val isPrimary: Boolean)
-}
-
-/** 원생 목록 (STU-001 최소형). 교사는 담당 반 학생만, 보호자 연락처는 마스킹 */
-interface ListStudentsQuery {
-    fun list(actor: UserId, institutionId: InstitutionId, classroomId: ClassroomId?): List<StudentView>
+    // sendInstallGuide: 미가입 보호자에게 앱 설치 안내 알림톡 (STU-003)
 }
 
 data class StudentView(
@@ -33,4 +31,4 @@ data class StudentView(
     val guardians: List<GuardianView>,
 )
 
-data class GuardianView(val phoneMasked: String, val relation: String?, val isPrimary: Boolean, val linkStatus: GuardianLinkStatus)
+data class GuardianView(val id: GuardianId, val phoneMasked: String, val relation: String?, val isPrimary: Boolean, val linkStatus: GuardianLinkStatus)

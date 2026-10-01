@@ -72,6 +72,7 @@ class StudentEntity(
     var birthEnc: String,
     var grade: String?,
     var status: String,
+    var memo: String? = null,
 )
 
 @Entity @Table(name = "enrollment")
@@ -171,5 +172,59 @@ class NotificationLogEntity(
     var recipientCount: Int,
     var status: String,
     var error: String?,
+    var createdAt: Instant,
+)
+
+@Entity @Table(name = "student_status_history")
+class StudentStatusHistoryEntity(
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) var id: Long? = null,
+    var institutionId: UUID,
+    var studentId: UUID,
+    var fromStatus: String,
+    var toStatus: String,
+    var reason: String?,
+    var effectiveDate: LocalDate,
+    var note: String?,
+    var actorId: UUID,
+    var createdAt: Instant,
+)
+
+@Entity @Table(name = "invitation")
+class InvitationEntity(
+    @Id var id: UUID,
+    var institutionId: UUID,
+    var token: String,
+    var phoneEnc: String,
+    var phoneHash: String,
+    var invitedBy: UUID,
+    var expiresAt: Instant,
+)
+
+@Entity @Table(name = "join_request")
+class JoinRequestEntity(
+    @Id var id: UUID,
+    var institutionId: UUID,
+    var invitationId: UUID,
+    var childName: String,
+    var birthEnc: String,
+    var guardianName: String,
+    var guardianPhoneEnc: String,
+    var relation: String?,
+    var status: String,
+    var classroomId: UUID?,
+    var decidedBy: UUID?,
+    var decidedAt: Instant?,
+    var rejectReason: String?,
+    var submittedAt: Instant,
+)
+
+@Entity @Table(name = "student_import_job")
+class StudentImportJobEntity(
+    @Id var id: UUID,
+    var institutionId: UUID,
+    var createdBy: UUID,
+    var status: String,
+    var totalRows: Int,
+    var bodyEnc: String,
     var createdAt: Instant,
 )
