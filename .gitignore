@@ -7,3 +7,5 @@ build/
 .env
 *.local.yml
 firebase-*.json
+/qodana.yaml
+/.github/workflows/qodana_code_quality.yml
