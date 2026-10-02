@@ -15,7 +15,21 @@ import java.time.YearMonth
  */
 interface AuditLogPort {
     fun record(entry: AuditEntry)
+    /** SEC-002 감사 로그 조회 — 최신순 */
+    fun search(criteria: AuditSearchCriteria): PageResult<AuditRecord>
 }
+
+data class AuditSearchCriteria(
+    val institutionId: InstitutionId,
+    val action: String?,
+    val actorId: UserId?,
+    val from: Instant?,
+    val to: Instant?,
+    val page: Int,
+    val size: Int,
+)
+
+data class AuditRecord(val id: Long, val entry: AuditEntry)
 
 data class AuditEntry(
     val institutionId: InstitutionId,

@@ -5,6 +5,15 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.ttokttok.application.port.out.AuditEntry
 import com.ttokttok.application.port.out.AuditLogPort
+import com.ttokttok.application.port.out.AuditRecord
+import com.ttokttok.application.port.out.AuditSearchCriteria
+import com.ttokttok.application.port.out.PageResult
+import com.ttokttok.domain.common.InstitutionId
+import com.ttokttok.domain.common.UserId
+import com.fasterxml.jackson.module.kotlin.readValue
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
+import java.util.UUID
 import com.ttokttok.application.port.out.DailyAttendanceStat
 import com.ttokttok.application.port.out.DailyAttendanceStatPort
 import org.springframework.jdbc.core.JdbcTemplate
@@ -18,6 +27,33 @@ import java.sql.Timestamp
 @Component
 class AuditLogJdbcAdapter(private val jdbc: JdbcTemplate) : AuditLogPort {
     private val json: ObjectMapper = jacksonObjectMapper().registerModule(JavaTimeModule())
+    private val named = NamedParameterJdbcTemplate(jdbc)
+
+    override fun search(criteria: AuditSearchCriteria): PageResult<AuditRecord> {
+        val where = StringBuilder("institution_id = :inst")
+        val params = MapSqlParameterSource("inst", criteria.institutionId.value)
+        criteria.action?.let { where.append(" and action = :action"); params.addValue("action", it) }
+        criteria.actorId?.let { where.append(" and actor_id = :actor"); params.addValue("actor", it.value) }
+        criteria.from?.let { where.append(" and at >= :from"); params.addValue("from", Timestamp.from(it)) }
+        criteria.to?.let { where.append(" and at < :to"); params.addValue("to", Timestamp.from(it)) }
+        val total = named.queryForObject("select count(*) from audit_log where $where", params, java.lang.Long::class.java)?.toLong() ?: 0L
+        params.addValue("limit", criteria.size).addValue("offset", criteria.page.toLong() * criteria.size)
+        val items = named.query(
+            "select * from audit_log where $where order by at desc, id desc limit :limit offset :offset", params,
+        ) { rs, _ ->
+            AuditRecord(
+                rs.getLong("id"),
+                AuditEntry(
+                    institutionId = InstitutionId(rs.getObject("institution_id", UUID::class.java)),
+                    actorId = UserId(rs.getObject("actor_id", UUID::class.java)),
+                    action = rs.getString("action"), resource = rs.getString("resource"), resourceId = rs.getString("resource_id"),
+                    diff = json.readValue(rs.getString("diff")),
+                    at = rs.getTimestamp("at").toInstant(),
+                ),
+            )
+        }
+        return PageResult(items, criteria.page, criteria.size, total)
+    }
 
     override fun record(entry: AuditEntry) {
         jdbc.update(

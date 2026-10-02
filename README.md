@@ -174,6 +174,16 @@ docker compose up -d                          # postgres(ttok, ttok_test) + redi
 refresh 토큰은 쓸 때마다 회전한다(`refresh_token` 테이블). 이미 회전된 토큰이 다시 오면 탈취로 보고 같은 로그인 계열을 모두 폐기한다.
 비밀번호 변경·임시 비밀번호 발급 시 기존 세션을 모두 폐기한다. 알림장 생성 API는 `attachments`(파일 id)를 받는다.
 
+## 보안·운영
+
+| 항목 | 내용 |
+| --- | --- |
+| 로그인 잠금 | 계정당 5회 실패 시 10분 잠금(`409 ACCOUNT_LOCKED`), 성공 시 초기화. 남은 횟수는 알려주지 않음(계정 존재 비노출) |
+| Rate limit | 로그인·임시 비밀번호·초대 링크 제출·교직원 초대 수락: IP당 분당 10회(`429`). 인스턴스 메모리 기준 |
+| 감사 로그 조회 | `GET /api/v1/audit-logs?action&actorId&from&to&page&size` (OWNER, 최신순) |
+| 미확정 파일 정리 | 매일 03:30, 업로드 요청 후 24시간 지나도 complete 안 된 파일을 S3·DB에서 삭제 |
+| 메일 발송 | `EMAIL_MODE=ses` + `EMAIL_FROM` (SES 도메인 인증 필요). 기본 log |
+
 개인정보 저장 규칙: 초대·가입요청·업로드 작업·Outbox 페이로드의 연락처는 모두 AES-256-GCM 암호문으로 저장한다.
 
 업무 API는 `Authorization: Bearer {access}` + `X-Institution-Id` 헤더를 쓴다. 오류 형식은 `{code, message, details}`.
@@ -184,9 +194,9 @@ refresh 토큰은 쓸 때마다 회전한다(`refresh_token` 테이블). 이미 
 - Refresh 토큰 회전·폐기 목록(Redis), 로그인 5회 실패 잠금
 - PostgreSQL RLS·Hibernate Filter 기반 테넌트 이중 방어 — 현재는 모든 포트 조회에 `institutionId` 필수 + `AccessGuard`
 - STOMP Redis 브로커 릴레이(서버 다중화), QueryDSL(조회 전용 Query Port)
-- 알림톡·SES 실제 발송 어댑터 (현재 log 모드), 감사 로그(audit_log)
+- 알림톡 실제 발송 어댑터 (대행사 확정 후, Open Issue 4), Rate limit·KPI 카운터의 Redis 전환
 - 엑셀 업로드 중복 검사는 기관 전체 원생을 읽어 비교 — 원생 수천 명 규모가 되면 해시 컬럼 조회로 교체
-- S11–12: 로그인 5회 실패 잠금, 학부모 SMS 인증(Open Issue 1), 약관 실제 본문(법무), 업로드 후 미확정(PENDING) 파일 정리 배치
+- S11–12: 학부모 SMS 인증(Open Issue 1), 약관 실제 본문(법무)
 - S9–10: 행사 사진·첨부, 대상 변경(추가 초대), 학부모 주간 스케줄(PAR-003)에 행사 노출
 - S7–8: 알림장 사진·파일 첨부(S3 저장소), 학부모 회신(댓글), 미열람 재발송 시 알림톡 대체(옵션), 예약 발송 반복 실패 건 격리
 - S5–6: 교육청 출석부 실제 양식(Open Issue #5) 확보 후 `PoiAttendanceRegisterAdapter` 레이아웃 교체, 결석 증빙 파일 첨부(S3 저장소), KPI Redis 카운터·공지 열람률(알림장 스프린트), 대형 기관용 비동기 엑셀 job

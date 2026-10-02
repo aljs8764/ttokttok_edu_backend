@@ -9,6 +9,7 @@ import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.S3Configuration
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException
@@ -76,6 +77,10 @@ class S3ObjectStorageAdapter(
         null
     } catch (e: S3Exception) {
         if (e.statusCode() == 404) null else throw e
+    }
+
+    override fun delete(key: String) {
+        client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build()) // S3 는 없는 키 삭제도 성공
     }
 
     override fun destroy() {

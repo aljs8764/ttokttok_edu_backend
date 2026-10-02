@@ -8,3 +8,5 @@ ttok:
     enabled: false
   push:
     mode: log
+  rate-limit:
+    auth-per-minute: 10000   # 테스트는 같은 IP 로 로그인을 반복한다

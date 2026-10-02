@@ -1,5 +1,6 @@
 package com.ttokttok.adapter.out.persistence
 
+import com.ttokttok.application.port.out.LoginAttemptPort
 import com.ttokttok.application.port.out.RefreshTokenPort
 import com.ttokttok.application.port.out.RefreshTokenRecord
 import com.ttokttok.application.port.out.StaffInvitationPort
@@ -17,6 +18,7 @@ import com.ttokttok.domain.terms.Terms
 import com.ttokttok.domain.terms.TermsAgreement
 import com.ttokttok.domain.terms.TermsId
 import com.ttokttok.domain.terms.TermsType
+import com.ttokttok.domain.user.LoginAttempt
 import com.ttokttok.domain.user.Role
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
@@ -67,6 +69,33 @@ class StoredFileJdbcAdapter(jdbc: JdbcTemplate) : StoredFilePort {
         ids.map { it.value }.distinct().chunked(1000).flatMap {
             named.query("select * from stored_file where id in (:ids)", MapSqlParameterSource("ids", it), mapper)
         }
+
+    override fun findPendingBefore(before: Instant, limit: Int): List<StoredFile> =
+        plain.query(
+            "select * from stored_file where status = 'PENDING' and created_at < ? order by created_at limit ? for update skip locked",
+            mapper, Timestamp.from(before), limit,
+        )
+
+    override fun delete(id: FileId) {
+        plain.update("delete from stored_file where id = ? and status = 'PENDING'", id.value)
+    }
+}
+
+@Component
+class LoginAttemptJdbcAdapter(private val jdbc: JdbcTemplate) : LoginAttemptPort {
+    override fun find(userId: UserId): LoginAttempt? =
+        jdbc.query("select * from login_attempt where user_id = ?", { rs, _ ->
+            LoginAttempt(UserId(rs.uuid("user_id")), rs.getInt("failed_count"), rs.instantOrNull("locked_until"))
+        }, userId.value).firstOrNull()
+
+    override fun save(attempt: LoginAttempt) {
+        jdbc.update(
+            """insert into login_attempt (user_id, failed_count, locked_until, updated_at) values (?, ?, ?, now())
+               on conflict (user_id) do update set failed_count = excluded.failed_count,
+                   locked_until = excluded.locked_until, updated_at = now()""",
+            attempt.userId.value, attempt.failedCount, attempt.lockedUntil.ts(),
+        )
+    }
 }
 
 @Component

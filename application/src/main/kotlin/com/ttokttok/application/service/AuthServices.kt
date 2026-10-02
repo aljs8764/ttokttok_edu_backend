@@ -109,14 +109,33 @@ class LoginService(
     private val users: UserPort,
     private val hasher: PasswordHasherPort,
     private val assembler: AuthenticatedUserAssembler,
+    private val attempts: com.ttokttok.application.port.out.LoginAttemptPort,
+    private val clock: com.ttokttok.application.port.out.ClockPort,
 ) : LoginUseCase {
-    @Transactional(readOnly = true)
+    /** 실패 기록은 예외를 던져도 남아야 하므로 롤백하지 않는다 */
+    @Transactional(noRollbackFor = [UnauthenticatedException::class])
     override fun login(command: LoginUseCase.Command): AuthenticatedUser {
         val id = command.loginId.trim()
         val user = if (id.contains("@")) users.findByEmail(id.lowercase())
         else runCatching { PhoneNumber.of(id) }.getOrNull()?.let { users.findByPhone(it) }
         // 계정 존재 여부를 노출하지 않도록 같은 메시지 사용
-        if (user == null || !hasher.matches(command.password, user.passwordHash)) throw UnauthenticatedException("아이디 또는 비밀번호가 올바르지 않습니다")
+        if (user == null) throw UnauthenticatedException("아이디 또는 비밀번호가 올바르지 않습니다")
+
+        val now = clock.now()
+        val attempt = attempts.find(user.id) ?: com.ttokttok.domain.user.LoginAttempt(user.id)
+        if (attempt.isLocked(now)) {
+            throw ConflictException("ACCOUNT_LOCKED", "로그인에 5회 실패해 10분간 잠겼습니다. 잠시 후 다시 시도하거나 비밀번호를 재설정하세요")
+        }
+        if (!hasher.matches(command.password, user.passwordHash)) {
+            val failed = attempt.recordFailure(now)
+            attempts.save(failed)
+            throw UnauthenticatedException(
+                if (failed.isLocked(now)) "로그인에 5회 실패해 10분간 잠겼습니다"
+                // 남은 횟수는 알려주지 않는다 — 없는 계정과 응답이 달라져 존재 여부가 드러남
+                else "아이디 또는 비밀번호가 올바르지 않습니다",
+            )
+        }
+        if (attempt.failedCount > 0) attempts.save(com.ttokttok.domain.user.LoginAttempt(user.id))
         return assembler.assemble(user)
     }
 }

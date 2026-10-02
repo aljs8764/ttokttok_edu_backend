@@ -16,6 +16,9 @@ interface StoredFilePort {
     fun save(file: StoredFile): StoredFile
     fun find(id: FileId): StoredFile?
     fun findAllByIds(ids: Collection<FileId>): List<StoredFile>
+    /** 정리 배치: 오래된 미확정(PENDING) 업로드 */
+    fun findPendingBefore(before: Instant, limit: Int): List<StoredFile>
+    fun delete(id: FileId)
 }
 
 /** S3 (구현: adapter-out-storage). 서버는 바이트를 다루지 않고 서명 URL만 발급한다 */
@@ -26,6 +29,8 @@ interface ObjectStoragePort {
     fun presignDownload(key: String, filename: String, mime: String): PresignedUrl
     /** 업로드 확인: 객체가 있으면 크기, 없으면 null */
     fun sizeOf(key: String): Long?
+    /** 없는 키여도 오류 없이 넘어간다 */
+    fun delete(key: String)
 }
 
 data class PresignedUrl(val url: String, val method: String, val headers: Map<String, String>, val expiresAt: Instant)
@@ -60,4 +65,9 @@ interface TermsPort {
     fun findAll(): List<Terms>
     fun findAgreedIds(userId: UserId): Set<TermsId>
     fun saveAgreements(agreements: List<TermsAgreement>)
+}
+
+interface LoginAttemptPort {
+    fun find(userId: UserId): com.ttokttok.domain.user.LoginAttempt?
+    fun save(attempt: com.ttokttok.domain.user.LoginAttempt)
 }

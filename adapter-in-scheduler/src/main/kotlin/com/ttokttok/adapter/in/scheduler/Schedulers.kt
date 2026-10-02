@@ -1,5 +1,6 @@
 package com.ttokttok.adapter.`in`.scheduler
 
+import com.ttokttok.application.port.`in`.CleanupStaleFilesUseCase
 import com.ttokttok.application.port.`in`.DailyAttendanceBatchUseCase
 import com.ttokttok.application.port.`in`.ProcessOutboxUseCase
 import com.ttokttok.application.port.`in`.PublishDueNoticesUseCase
@@ -76,5 +77,16 @@ class EventReminderScheduler(private val remind: RemindEventUseCase) {
     @Scheduled(fixedDelayString = "\${ttok.event.reminder-interval-ms:300000}")
     fun remindDue() {
         while (remind.remindDue(20) == 20) Unit
+    }
+}
+
+/** 업로드만 요청하고 확정하지 않은 파일 정리 (매일 03:30, 24시간 경과분) */
+@Component
+@ConditionalOnProperty(name = ["ttok.scheduler.enabled"], havingValue = "true", matchIfMissing = true)
+class StaleFileCleanupScheduler(private val cleanup: CleanupStaleFilesUseCase) {
+    @Scheduled(cron = "0 30 3 * * *", zone = "Asia/Seoul")
+    @SchedulerLock(name = "files.cleanupStale")
+    fun run() {
+        while (cleanup.cleanup(200) == 200) Unit
     }
 }

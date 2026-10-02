@@ -26,6 +26,7 @@ spring:
       max-request-size: 6MB
 
 server:
+  forward-headers-strategy: native   # ALB X-Forwarded-For → remoteAddr (rate limit)
   port: ${PORT:8080}
   shutdown: graceful
 
@@ -51,7 +52,8 @@ ttok:
   alimtalk:
     mode: ${ALIMTALK_MODE:log}
   email:
-    mode: ${EMAIL_MODE:log}
+    mode: ${EMAIL_MODE:log}   # log | ses
+    from: ${EMAIL_FROM:no-reply@ttok.app}
   push:
     mode: ${PUSH_MODE:log}   # log | fcm (api는 발송하지 않지만 빈 구성상 포함)
     fcm:

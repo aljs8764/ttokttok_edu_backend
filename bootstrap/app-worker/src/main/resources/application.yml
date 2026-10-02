@@ -51,7 +51,8 @@ ttok:
   alimtalk:
     mode: ${ALIMTALK_MODE:log}
   email:
-    mode: ${EMAIL_MODE:log}
+    mode: ${EMAIL_MODE:log}   # log | ses
+    from: ${EMAIL_FROM:no-reply@ttok.app}
   push:
     mode: ${PUSH_MODE:log}   # log | fcm (워커가 실제 발송)
     fcm:
