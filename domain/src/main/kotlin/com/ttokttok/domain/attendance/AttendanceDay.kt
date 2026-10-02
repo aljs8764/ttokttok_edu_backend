@@ -9,6 +9,7 @@ import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.InvalidInputException
 import com.ttokttok.domain.common.StudentId
 import com.ttokttok.domain.common.UserId
+import com.ttokttok.domain.file.FileId
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -40,6 +41,8 @@ data class AttendanceDay(
     val nextDestinationId: DestinationId? = null,
     /** 결석 사유 (ATT-003). 사유가 등록된 결석은 "사전 연락 결석"으로 보고 등원율 분모에서 뺀다 */
     val absenceReason: String? = null,
+    /** 결석 증빙 (진단서 등, ATT-003) */
+    val evidenceFileId: FileId? = null,
 ) {
     val monthlyMark: MonthlyMark
         get() = when (status) {
@@ -87,11 +90,11 @@ data class AttendanceDay(
             )
             AttendanceStatus.IN -> copy(
                 status = to, isLate = isLate ?: (attended && this.isLate), isEarlyLeave = false,
-                checkInAt = checkInAt ?: at, checkOutAt = null, nextDestinationId = null, absenceReason = null,
+                checkInAt = checkInAt ?: at, checkOutAt = null, nextDestinationId = null, absenceReason = null, evidenceFileId = null,
             )
             AttendanceStatus.OUT -> copy(
                 status = to, isLate = isLate ?: (attended && this.isLate), isEarlyLeave = isEarlyLeave ?: (status == AttendanceStatus.OUT && this.isEarlyLeave),
-                checkInAt = checkInAt ?: at, checkOutAt = checkOutAt ?: at, absenceReason = null,
+                checkInAt = checkInAt ?: at, checkOutAt = checkOutAt ?: at, absenceReason = null, evidenceFileId = null,
             )
             AttendanceStatus.SCHEDULED -> error("unreachable")
         }
@@ -105,6 +108,12 @@ data class AttendanceDay(
         val r = reason?.trim()?.takeIf { it.isNotEmpty() }
         if ((r?.length ?: 0) > MAX_REASON) throw InvalidInputException("REASON_TOO_LONG", "사유는 ${MAX_REASON}자 이내입니다")
         return copy(absenceReason = r)
+    }
+
+    /** 결석 증빙 첨부·해제 (ATT-003). 결석일 때만 */
+    fun withEvidence(fileId: FileId?): AttendanceDay {
+        if (status != AttendanceStatus.ABSENT) throw ConflictException("NOT_ABSENT", "결석인 날에만 증빙을 첨부할 수 있습니다")
+        return copy(evidenceFileId = fileId)
     }
 
     /** 23:50 배치: 아무 처리도 없던 예정 건을 결석으로 확정 */

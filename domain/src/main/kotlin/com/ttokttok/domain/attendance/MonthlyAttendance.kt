@@ -2,6 +2,7 @@ package com.ttokttok.domain.attendance
 
 import com.ttokttok.domain.common.AttendanceDayId
 import com.ttokttok.domain.common.StudentId
+import com.ttokttok.domain.file.FileId
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -30,6 +31,7 @@ data class MonthlyCell(
     val isLate: Boolean,
     val isEarlyLeave: Boolean,
     val absenceReason: String?,
+    val evidenceFileId: FileId? = null,
 )
 
 object MonthlyAttendanceSheet {
@@ -43,7 +45,7 @@ object MonthlyAttendanceSheet {
         val ids = roster.keys + byStudent.keys
         return ids.map { id ->
             val cells = byStudent[id].orEmpty().associate { d ->
-                d.date to MonthlyCell(d.id, d.monthlyMark, d.isLate, d.isEarlyLeave, d.absenceReason)
+                d.date to MonthlyCell(d.id, d.monthlyMark, d.isLate, d.isEarlyLeave, d.absenceReason, d.evidenceFileId)
             }
             MonthlyRow(id, roster[id] ?: "(전출)", cells)
         }.sortedWith(compareBy({ it.studentName }, { it.studentId.value }))

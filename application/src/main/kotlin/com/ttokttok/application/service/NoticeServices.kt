@@ -35,6 +35,7 @@ import com.ttokttok.domain.common.ConflictException
 import com.ttokttok.domain.common.StudentId
 import com.ttokttok.domain.common.UserId
 import com.ttokttok.domain.messaging.GuardianMessageRequested
+import com.ttokttok.domain.file.FilePurpose
 import com.ttokttok.domain.messaging.MessageTemplate
 import com.ttokttok.domain.notice.Notice
 import com.ttokttok.domain.notice.NoticeId
@@ -175,16 +176,18 @@ class ComposeNoticeService(
     private val publisher: NoticePublisher,
     private val notices: NoticePort,
     private val views: NoticeViewAssembler,
+    private val fileRefs: FileRefResolver,
     private val clock: ClockPort,
 ) : ComposeNoticeUseCase {
 
     @Transactional
     override fun create(command: ComposeNoticeUseCase.Command): NoticeView {
         audience.authorize(command.actor, command.institutionId, command.kind, command.targets)
+        fileRefs.requireUsable(command.attachments, command.institutionId, FilePurpose.NOTICE_ATTACHMENT)
         val now = clock.now()
         val notice = Notice.compose(
             command.institutionId, command.actor, command.kind, command.title, command.body,
-            command.pinned, command.targets, command.sendAt, now,
+            command.pinned, command.targets, command.sendAt, now, command.attachments,
         )
         if (audience.expand(command.institutionId, notice.targets).isEmpty())
             throw InvalidInputException("NO_RECIPIENTS", "받을 원생이 없습니다")
@@ -198,8 +201,9 @@ class ComposeNoticeService(
         val current = editable(actor, institutionId, id)
         if (command.kind != current.kind) throw InvalidInputException("KIND_IMMUTABLE", "알림장 종류는 바꿀 수 없습니다")
         audience.authorize(actor, institutionId, current.kind, command.targets)
+        fileRefs.requireUsable(command.attachments, institutionId, FilePurpose.NOTICE_ATTACHMENT)
         val now = clock.now()
-        val edited = notices.save(current.edit(command.title, command.body, command.pinned, command.targets, command.sendAt, now))
+        val edited = notices.save(current.edit(command.title, command.body, command.pinned, command.targets, command.sendAt, now, command.attachments))
         val result = if (edited.isDue(now)) publisher.publish(edited, now) else edited
         return views.view(result)
     }
@@ -223,6 +227,7 @@ class NoticeViewAssembler(
     private val audience: NoticeAudience,
     private val recipients: NoticeRecipientPort,
     private val users: UserPort,
+    private val fileRefs: FileRefResolver,
 ) {
     fun view(n: Notice, stats: ReadStats? = null, authorName: String? = null) = NoticeView(
         id = n.id, kind = n.kind, title = n.title, body = n.body, pinned = n.pinned,
@@ -231,6 +236,7 @@ class NoticeViewAssembler(
         authorId = n.authorId, authorName = authorName ?: users.findById(n.authorId)?.name ?: "(알 수 없음)",
         createdAt = n.createdAt,
         readStats = stats ?: if (n.status == NoticeStatus.SENT) NoticeReadSummary.of(recipients.findByNotice(n.id)).toStats() else null,
+        attachments = fileRefs.refs(n.attachments, withUrl = false),
     )
 
     fun views(list: List<Notice>): List<NoticeView> {
@@ -362,6 +368,7 @@ class ParentNoticeService(
     private val recipients: NoticeRecipientPort,
     private val users: UserPort,
     private val realtime: RealtimePort,
+    private val fileRefs: FileRefResolver,
     private val clock: ClockPort,
 ) : ParentNoticeUseCase {
 
@@ -411,6 +418,7 @@ class ParentNoticeService(
                 children = rows.map { it.studentId }.distinct().map { ChildRef(it, names[it] ?: "") },
                 readAt = rows.mapNotNull { it.readAt }.minOrNull(),
                 authorName = authors[n.authorId] ?: "",
+                attachments = fileRefs.refs(n.attachments, withUrl = !preview),
             )
         }.sortedByDescending { it.sentAt }
     }

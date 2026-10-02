@@ -29,6 +29,7 @@ interface GetTimelineQuery {
 /** FCM 토큰 등록 (PAR-002) */
 interface RegisterDeviceUseCase {
     fun register(user: UserId, flavor: AppFlavor, platform: Platform, token: String)
+    fun unregister(user: UserId, token: String)
 }
 
 /** 워커: Outbox 처리 → 푸시 발송 */

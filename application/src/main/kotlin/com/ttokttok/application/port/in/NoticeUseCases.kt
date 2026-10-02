@@ -4,6 +4,7 @@ import com.ttokttok.application.port.out.PageResult
 import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.StudentId
 import com.ttokttok.domain.common.UserId
+import com.ttokttok.domain.file.FileId
 import com.ttokttok.domain.notice.NoticeId
 import com.ttokttok.domain.notice.NoticeKind
 import com.ttokttok.domain.notice.NoticeStatus
@@ -26,6 +27,8 @@ interface ComposeNoticeUseCase {
         val pinned: Boolean,
         val targets: List<NoticeTarget>,
         val sendAt: Instant?,
+        /** 업로드 완료(NOTICE_ATTACHMENT)된 파일 id, 최대 10개 */
+        val attachments: List<FileId> = emptyList(),
     )
 }
 
@@ -72,6 +75,7 @@ data class NoticeView(
     val createdAt: Instant,
     /** 발송 전이면 null */
     val readStats: ReadStats?,
+    val attachments: List<FileRef> = emptyList(),
 )
 
 data class TargetView(val scope: String, val id: java.util.UUID?, val name: String)
@@ -111,6 +115,8 @@ data class ParentNoticeItem(
     val children: List<ChildRef>,
     val readAt: Instant?,
     val authorName: String,
+    /** 상세에서만 5분 다운로드 URL 포함 */
+    val attachments: List<FileRef> = emptyList(),
 )
 
 data class ChildRef(val studentId: StudentId, val name: String)

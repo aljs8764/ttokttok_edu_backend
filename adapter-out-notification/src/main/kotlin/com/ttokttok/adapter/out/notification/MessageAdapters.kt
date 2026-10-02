@@ -55,7 +55,9 @@ class RecordingEmailSender : SendEmailPort {
 class AppLinksAdapter(
     @Value("\${ttok.links.join-base-url:https://ttok.app/join/}") private val joinBase: String,
     @Value("\${ttok.links.app-install-url:https://ttok.app/download}") private val installUrl: String,
+    @Value("\${ttok.links.staff-invite-base-url:https://admin.ttok.app/invite/}") private val staffInviteBase: String,
 ) : AppLinksPort {
     override fun joinUrl(token: String) = joinBase.trimEnd('/') + "/" + token
     override fun appInstallUrl() = installUrl
+    override fun staffInviteUrl(token: String) = staffInviteBase.trimEnd('/') + "/" + token
 }

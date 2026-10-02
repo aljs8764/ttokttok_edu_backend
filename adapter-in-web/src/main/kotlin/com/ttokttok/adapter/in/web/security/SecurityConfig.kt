@@ -52,6 +52,8 @@ class SecurityConfig(@Value("\${ttok.jwt.secret}") secretB64: String) {
             .authorizeHttpRequests {
                 it.requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
                     .requestMatchers("/api/v1/join/**").permitAll()
+                    .requestMatchers("/api/v1/staff-invitations/*", "/api/v1/staff-invitations/*/accept").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/terms").permitAll()
                     .requestMatchers("/ws/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                     .anyRequest().authenticated()
             }

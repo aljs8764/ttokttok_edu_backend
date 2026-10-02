@@ -24,4 +24,5 @@ class NoticeEntity(
     var lastResentAt: Instant?,
     var createdAt: Instant,
     var updatedAt: Instant = Instant.now(),
+    @JdbcTypeCode(SqlTypes.JSON) var attachments: String = "[]",
 )

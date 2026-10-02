@@ -26,6 +26,10 @@ class InstitutionEntity(
     var ownerName: String,
     var lateThresholdMinutes: Int,
     var earlyLeaveThresholdMinutes: Int,
+    var address: String? = null,
+    var phone: String? = null,
+    var logoFileId: UUID? = null,
+    var sealFileId: UUID? = null,
 )
 
 @Entity @Table(name = "app_user")
@@ -105,6 +109,7 @@ class DestinationEntity(
     var name: String,
     var type: String,
     var sortOrder: Int,
+    var deletedAt: Instant? = null,
 )
 
 @Entity @Table(name = "attendance_day")
@@ -122,6 +127,7 @@ class AttendanceDayEntity(
     var nextDestinationId: UUID?,
     var updatedAt: Instant = Instant.now(),
     var absenceReason: String? = null,
+    var evidenceFileId: UUID? = null,
 )
 
 @Entity @Table(name = "attendance_event")

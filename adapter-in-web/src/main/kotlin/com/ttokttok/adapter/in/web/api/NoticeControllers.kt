@@ -9,6 +9,7 @@ import com.ttokttok.application.port.`in`.ResendUnreadNoticeUseCase
 import com.ttokttok.domain.common.ClassroomId
 import com.ttokttok.domain.common.InvalidInputException
 import com.ttokttok.domain.common.StudentId
+import com.ttokttok.domain.file.FileId
 import com.ttokttok.domain.notice.NoticeId
 import com.ttokttok.domain.notice.NoticeKind
 import com.ttokttok.domain.notice.NoticeStatus
@@ -47,6 +48,7 @@ internal fun NoticeView.toResponse() = mapOf(
     "status" to status.name, "scheduledAt" to scheduledAt, "sentAt" to sentAt, "lastResentAt" to lastResentAt,
     "author" to mapOf("id" to authorId.value, "name" to authorName), "createdAt" to createdAt,
     "readStats" to readStats?.let { mapOf("targetStudents" to it.targetStudents, "readStudents" to it.readStudents, "rate" to it.rate) },
+    "attachments" to attachments.map { it.toMap() },
 )
 
 /** NTC-001·002·004·005·006·009 (관리자 웹 + 교사앱) */
@@ -65,10 +67,13 @@ class NoticeController(
         @field:Size(min = 1, max = 200) val targets: List<NoticeTargetRequest>,
         /** null 이면 즉시 발송 */
         val sendAt: Instant? = null,
+        /** /files/presign(purpose=NOTICE_ATTACHMENT) → complete 한 파일 id, 최대 10개 */
+        @field:Size(max = 10) val attachments: List<UUID> = emptyList(),
     )
 
     private fun NoticeRequest.toCommand(jwt: Jwt, institutionId: UUID) = ComposeNoticeUseCase.Command(
         jwt.userId(), inst(institutionId), kind, title, body, pinned, targets.map { it.toDomain() }, sendAt,
+        attachments.map(::FileId),
     )
 
     /** 작성 + 즉시/예약 발송. 전체 공지(ANNOUNCEMENT)는 원장·실장만 */
@@ -158,5 +163,6 @@ class MeNoticeController(private val notices: ParentNoticeUseCase) {
         "kind" to kind.name, "title" to title, "body" to body, "pinned" to pinned, "sentAt" to sentAt,
         "children" to children.map { mapOf("studentId" to it.studentId.value, "name" to it.name) },
         "readAt" to readAt, "authorName" to authorName,
+        "attachments" to attachments.map { it.toMap() },
     )
 }

@@ -15,6 +15,8 @@ data class Destination(
     val sortOrder: Int = 0,
 ) {
     init {
-        if (name.isBlank()) throw InvalidInputException("INVALID_NAME", "목적지 이름은 필수입니다")
+        if (name.isBlank() || name.length > 50) throw InvalidInputException("INVALID_NAME", "목적지 이름은 1~50자입니다")
     }
+
+    fun rename(name: String, type: DestinationType) = copy(name = name.trim(), type = type)
 }

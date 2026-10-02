@@ -110,6 +110,8 @@ class PasswordService(
     private val users: UserPort,
     private val hasher: PasswordHasherPort,
     private val email: SendEmailPort,
+    private val sessions: com.ttokttok.application.port.out.RefreshTokenPort,
+    private val clock: com.ttokttok.application.port.out.ClockPort,
 ) : PasswordUseCase {
     private val log = LoggerFactory.getLogger(javaClass)
     private val random = SecureRandom()
@@ -123,6 +125,7 @@ class PasswordService(
         }
         val temp = temporaryPassword()
         users.save(user.withPassword(hasher.hash(temp), mustChange = true))
+        sessions.revokeAllForUser(user.id, clock.now()) // 기존 로그인 세션 모두 종료
         this.email.send(
             user.email!!, "[똑똑] 임시 비밀번호 안내",
             "${user.name}님, 임시 비밀번호는 $temp 입니다.\n로그인 후 바로 새 비밀번호로 변경해 주세요.",
@@ -136,6 +139,7 @@ class PasswordService(
         if (currentPassword == newPassword) throw InvalidInputException("SAME_PASSWORD", "이전과 다른 비밀번호를 입력하세요")
         validatePassword(newPassword)
         users.save(user.withPassword(hasher.hash(newPassword), mustChange = false))
+        sessions.revokeAllForUser(actor, clock.now()) // 다른 기기 세션 종료 (현재 기기는 다시 로그인)
     }
 
     /** 영문 대소문자+숫자 10자 — 혼동 문자(0/O, 1/l) 제외 */

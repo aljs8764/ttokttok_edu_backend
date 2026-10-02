@@ -94,6 +94,12 @@ class RegisterDeviceService(private val devices: DeviceTokenPort) : RegisterDevi
         if (token.isBlank() || token.length > 4096) throw InvalidInputException("INVALID_TOKEN", "FCM 토큰이 올바르지 않습니다")
         devices.upsert(DeviceToken(user, flavor, platform, token))
     }
+
+    @Transactional
+    override fun unregister(user: UserId, token: String) {
+        if (token.isBlank()) throw InvalidInputException("INVALID_TOKEN", "FCM 토큰이 올바르지 않습니다")
+        devices.deleteForUser(user, token)
+    }
 }
 
 /**

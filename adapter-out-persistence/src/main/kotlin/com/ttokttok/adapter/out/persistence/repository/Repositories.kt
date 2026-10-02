@@ -71,6 +71,7 @@ interface GuardianJpaRepository : JpaRepository<GuardianEntity, UUID> {
 interface DestinationJpaRepository : JpaRepository<DestinationEntity, UUID> {
     fun findByIdAndInstitutionId(id: UUID, institutionId: UUID): DestinationEntity?
     fun findByInstitutionId(institutionId: UUID): List<DestinationEntity>
+    fun findByInstitutionIdAndDeletedAtIsNull(institutionId: UUID): List<DestinationEntity>
 }
 
 interface AttendanceDayJpaRepository : JpaRepository<AttendanceDayEntity, UUID> {
@@ -137,6 +138,9 @@ interface OutboxJpaRepository : JpaRepository<OutboxEntity, UUID> {
 
 interface DeviceTokenJpaRepository : JpaRepository<DeviceTokenEntity, String> {
     fun findByUserIdInAndFlavor(userIds: Collection<UUID>, flavor: String): List<DeviceTokenEntity>
+    @Modifying
+    @Query("delete from DeviceTokenEntity d where d.token = :token and d.userId = :userId")
+    fun deleteByTokenAndUserId(@Param("token") token: String, @Param("userId") userId: UUID): Int
 }
 
 interface NotificationLogJpaRepository : JpaRepository<NotificationLogEntity, Long>

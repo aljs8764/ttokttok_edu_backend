@@ -1,6 +1,7 @@
 package com.ttokttok.adapter.out.persistence
 
 import com.ttokttok.adapter.out.persistence.entity.AttendanceDayEntity
+import com.ttokttok.domain.file.FileId
 import com.ttokttok.adapter.out.persistence.entity.AttendanceEventEntity
 import com.ttokttok.adapter.out.persistence.entity.ClassroomEntity
 import com.ttokttok.adapter.out.persistence.entity.DestinationEntity
@@ -85,12 +86,20 @@ internal fun Int.toDays(): Set<DayOfWeek> = DayOfWeek.entries.filter { this and 
 @Component
 class InstitutionPersistenceAdapter(private val repo: InstitutionJpaRepository) : InstitutionPort {
     override fun save(institution: Institution): Institution {
-        repo.save(InstitutionEntity(institution.id.value, institution.name, institution.ownerName, institution.lateThresholdMinutes, institution.earlyLeaveThresholdMinutes))
+        repo.save(
+            InstitutionEntity(
+                institution.id.value, institution.name, institution.ownerName, institution.lateThresholdMinutes, institution.earlyLeaveThresholdMinutes,
+                institution.address, institution.phone, institution.logoFileId?.value, institution.sealFileId?.value,
+            ),
+        )
         return institution
     }
     override fun findById(id: InstitutionId) = repo.findByIdOrNull(id.value)?.toDomain()
     override fun findAllByIds(ids: Collection<InstitutionId>) = repo.findAllById(ids.map { it.value }).map { it.toDomain() }
-    private fun InstitutionEntity.toDomain() = Institution(InstitutionId(id), name, ownerName, lateThresholdMinutes, earlyLeaveThresholdMinutes)
+    private fun InstitutionEntity.toDomain() = Institution(
+        InstitutionId(id), name, ownerName, lateThresholdMinutes, earlyLeaveThresholdMinutes,
+        address, phone, logoFileId?.let(::FileId), sealFileId?.let(::FileId),
+    )
 }
 
 @Component
@@ -213,12 +222,16 @@ class GuardianPersistenceAdapter(private val repo: GuardianJpaRepository, privat
 @Component
 class DestinationPersistenceAdapter(private val repo: DestinationJpaRepository) : DestinationPort {
     override fun save(destination: Destination): Destination {
-        repo.save(DestinationEntity(destination.id.value, destination.institutionId.value, destination.name, destination.type.name, destination.sortOrder))
+        val deletedAt = repo.findByIdOrNull(destination.id.value)?.deletedAt
+        repo.save(DestinationEntity(destination.id.value, destination.institutionId.value, destination.name, destination.type.name, destination.sortOrder, deletedAt))
         return destination
+    }
+    override fun softDelete(id: DestinationId, institutionId: InstitutionId, at: Instant) {
+        repo.findByIdAndInstitutionId(id.value, institutionId.value)?.apply { deletedAt = at }
     }
     override fun find(id: DestinationId, institutionId: InstitutionId) = repo.findByIdAndInstitutionId(id.value, institutionId.value)?.toDomain()
     override fun findAllByIds(ids: Collection<DestinationId>) = if (ids.isEmpty()) emptyList() else repo.findAllById(ids.map { it.value }).map { it.toDomain() }
-    override fun findByInstitution(institutionId: InstitutionId) = repo.findByInstitutionId(institutionId.value).map { it.toDomain() }
+    override fun findByInstitution(institutionId: InstitutionId) = repo.findByInstitutionIdAndDeletedAtIsNull(institutionId.value).map { it.toDomain() }
     private fun DestinationEntity.toDomain() = Destination(DestinationId(id), InstitutionId(institutionId), name, DestinationType.valueOf(type), sortOrder)
 }
 
@@ -243,7 +256,7 @@ class AttendancePersistenceAdapter(
             AttendanceDayEntity(
                 day.id.value, day.institutionId.value, day.studentId.value, day.classroomId.value, day.date, day.status.name,
                 day.isLate, day.isEarlyLeave, day.checkInAt, day.checkOutAt, day.nextDestinationId?.value, Instant.now(),
-                absenceReason = day.absenceReason,
+                absenceReason = day.absenceReason, evidenceFileId = day.evidenceFileId?.value,
             ),
         )
         return day
@@ -286,7 +299,7 @@ class AttendancePersistenceAdapter(
     private fun AttendanceDayEntity.toDomain() = AttendanceDay(
         AttendanceDayId(id), InstitutionId(institutionId), StudentId(studentId), ClassroomId(classroomId), date,
         AttendanceStatus.valueOf(status), isLate, isEarlyLeave, checkInAt, checkOutAt, nextDestinationId?.let { DestinationId(it) },
-        absenceReason,
+        absenceReason, evidenceFileId?.let(::FileId),
     )
 
     private fun AttendanceEventEntity.toDomain() = AttendanceEvent(
@@ -307,6 +320,7 @@ class DeviceTokenPersistenceAdapter(private val repo: DeviceTokenJpaRepository) 
         else repo.findByUserIdInAndFlavor(userIds.map { it.value }, flavor.name)
             .map { DeviceToken(UserId(it.userId), AppFlavor.valueOf(it.flavor), Platform.valueOf(it.platform), it.token) }
     override fun deleteTokens(tokens: Collection<String>) = repo.deleteAllById(tokens)
+    override fun deleteForUser(userId: UserId, token: String) { repo.deleteByTokenAndUserId(token, userId.value) }
 }
 
 @Component

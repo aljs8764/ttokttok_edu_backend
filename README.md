@@ -1,4 +1,4 @@
-# 똑똑(Ttok-Ttok) Backend — Phase1 (S1–S10)
+# 똑똑(Ttok-Ttok) Backend — Phase1 (S1–S12)
 
 > 교사가 [하원(목적지)]을 누르면 학부모가 즉시 푸시를 받고 통합 타임라인에서 확인한다.
 
@@ -53,7 +53,8 @@ docker compose up -d                          # postgres(ttok, ttok_test) + redi
 | `PUSH_MODE` | `log`(기본, 발송 안 함) / `fcm` |
 | `FCM_CREDENTIALS_PATH` | Firebase 서비스 계정 JSON 경로 (`fcm`일 때) |
 | `ALIMTALK_MODE` `EMAIL_MODE` | `log`(기본). 대행사·SES 어댑터는 Open Issue #4 확정 후 추가 |
-| `JOIN_BASE_URL` `APP_INSTALL_URL` | 초대 링크·앱 설치 안내 URL |
+| `JOIN_BASE_URL` `APP_INSTALL_URL` `STAFF_INVITE_BASE_URL` | 초대 링크·앱 설치 안내·교직원 초대 URL |
+| `STORAGE_BUCKET` `STORAGE_REGION` `STORAGE_ENDPOINT` | S3 버킷. 로컬은 localstack(`http://localhost:4566`, AWS_ACCESS_KEY_ID/SECRET=test) |
 
 `application.yml`의 기본 키는 **개발 전용**이다. 운영에서 반드시 교체할 것.
 
@@ -148,6 +149,31 @@ docker compose up -d                          # postgres(ttok, ttok_test) + redi
 응답 단위는 학생(다자녀면 자녀별)이고 마감 전까지 바꿀 수 있다. 생성 시점 대상 학생을 `school_event_target`에 스냅샷한다.
 자동 독촉은 app-worker가 5분마다 "마감 N시간 전(기본 24h) & 미독촉" 행사를 1회 처리한다.
 
+## S11–12 API (설정·파일·약관·세션·스케줄)
+
+| Method | Path | 권한 | 기능 |
+| --- | --- | --- | --- |
+| GET/PUT | /api/v1/institution | 교직원 / OWNER | SET-001 기관 정보(주소·대표번호·지각/조퇴 기준·로고·직인). 변경 감사 로그 |
+| PATCH/DELETE | /api/v1/destinations/{id} | ADMIN+ | SET-002 목적지 수정·소프트 삭제 |
+| PUT | /api/v1/destinations/order | ADMIN+ | 표시 순서 변경 `{ids}` |
+| POST | /api/v1/files/presign | 교직원 | S3 업로드 URL `{purpose, filename, mime, size}` — jpg/png/heic/pdf, 20MB, 10분 |
+| POST | /api/v1/files/{id}/complete | 업로더·ADMIN+ | 업로드 확인(S3 HEAD로 크기 대조) |
+| GET | /api/v1/files/{id}/download-url | 교직원 | 5분 만료 다운로드 URL |
+| PUT | /api/v1/attendance/{dayId}/evidence | 담당 교사·ADMIN+ | ATT-003 결석 증빙 첨부·해제 `{fileId}` |
+| POST/GET/DELETE | /api/v1/staff/invitations[/{id}] | OWNER (목록 ADMIN+) | STF-002 이메일 초대(7일) · 목록 · 취소 |
+| GET/POST | /api/v1/staff-invitations/{token}[/accept] | 공개 | 초대 열람 · 수락(신규 계정 생성 또는 기존 계정 비밀번호 확인) → 로그인 토큰 |
+| GET | /api/v1/terms?audience=PARENT\|INSTITUTION | 공개 | SET-005 시행 중 약관 |
+| GET | /api/v1/me/terms/pending?audience | 로그인 | 미동의 필수 약관(개정 시 재동의) |
+| POST | /api/v1/me/terms/agreements | 로그인 | 약관 동의 `{termsIds}` (IP 기록) |
+| GET | /api/v1/me/schedule?childId&week | 학부모 | PAR-003 자녀 주간 스케줄(수업·행사·출결 상태, 다기관) |
+| GET | /api/v1/dashboard/schedule?days=7 | 교직원 | DASH-003 주요 일정(행사·RSVP 마감·예약 알림장) |
+| POST | /api/v1/auth/logout | 공개(refresh 소지) | 이 기기 로그아웃 |
+| DELETE | /api/v1/me/sessions | 로그인 | 모든 기기 로그아웃 |
+| DELETE | /api/v1/me/devices | 로그인 | FCM 토큰 해제 `{token}` |
+
+refresh 토큰은 쓸 때마다 회전한다(`refresh_token` 테이블). 이미 회전된 토큰이 다시 오면 탈취로 보고 같은 로그인 계열을 모두 폐기한다.
+비밀번호 변경·임시 비밀번호 발급 시 기존 세션을 모두 폐기한다. 알림장 생성 API는 `attachments`(파일 id)를 받는다.
+
 개인정보 저장 규칙: 초대·가입요청·업로드 작업·Outbox 페이로드의 연락처는 모두 AES-256-GCM 암호문으로 저장한다.
 
 업무 API는 `Authorization: Bearer {access}` + `X-Institution-Id` 헤더를 쓴다. 오류 형식은 `{code, message, details}`.
@@ -160,6 +186,7 @@ docker compose up -d                          # postgres(ttok, ttok_test) + redi
 - STOMP Redis 브로커 릴레이(서버 다중화), QueryDSL(조회 전용 Query Port)
 - 알림톡·SES 실제 발송 어댑터 (현재 log 모드), 감사 로그(audit_log)
 - 엑셀 업로드 중복 검사는 기관 전체 원생을 읽어 비교 — 원생 수천 명 규모가 되면 해시 컬럼 조회로 교체
+- S11–12: 로그인 5회 실패 잠금, 학부모 SMS 인증(Open Issue 1), 약관 실제 본문(법무), 업로드 후 미확정(PENDING) 파일 정리 배치
 - S9–10: 행사 사진·첨부, 대상 변경(추가 초대), 학부모 주간 스케줄(PAR-003)에 행사 노출
 - S7–8: 알림장 사진·파일 첨부(S3 저장소), 학부모 회신(댓글), 미열람 재발송 시 알림톡 대체(옵션), 예약 발송 반복 실패 건 격리
 - S5–6: 교육청 출석부 실제 양식(Open Issue #5) 확보 후 `PoiAttendanceRegisterAdapter` 레이아웃 교체, 결석 증빙 파일 첨부(S3 저장소), KPI Redis 카운터·공지 열람률(알림장 스프린트), 대형 기관용 비동기 엑셀 job

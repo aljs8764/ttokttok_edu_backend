@@ -12,6 +12,7 @@ import com.ttokttok.domain.common.ClassroomId
 import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.StudentId
 import com.ttokttok.domain.common.UserId
+import com.ttokttok.domain.file.FileId
 import com.ttokttok.domain.notice.Notice
 import com.ttokttok.domain.notice.NoticeId
 import com.ttokttok.domain.notice.NoticeKind
@@ -43,6 +44,7 @@ class NoticePersistenceAdapter(private val repo: NoticeJpaRepository) : NoticePo
                 targets = json.writeValueAsString(notice.targets.map { TargetJson(it.scope.name, it.classroomId?.value ?: it.studentId?.value) }),
                 status = notice.status.name, scheduledAt = notice.scheduledAt, sentAt = notice.sentAt,
                 lastResentAt = notice.lastResentAt, createdAt = notice.createdAt, updatedAt = Instant.now(),
+                attachments = json.writeValueAsString(notice.attachments.map { it.value }),
             ),
         )
         return notice
@@ -76,6 +78,7 @@ class NoticePersistenceAdapter(private val repo: NoticeJpaRepository) : NoticePo
         },
         status = NoticeStatus.valueOf(status), scheduledAt = scheduledAt, sentAt = sentAt,
         lastResentAt = lastResentAt, createdAt = createdAt,
+        attachments = json.readValue<List<UUID>>(attachments).map(::FileId),
     )
 }
 

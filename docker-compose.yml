@@ -1,4 +1,4 @@
-# 로컬 개발용: PostgreSQL 16 + Redis 7
+# 로컬 개발용: PostgreSQL 16 + Redis 7 + localstack(S3)
 services:
   postgres:
     image: postgres:16
@@ -13,5 +13,12 @@ services:
   redis:
     image: redis:7
     ports: ["6379:6379"]
+  localstack:
+    image: localstack/localstack:3
+    environment:
+      SERVICES: s3
+    ports: ["4566:4566"]
+    volumes:
+      - ./scripts/localstack-init.sh:/etc/localstack/init/ready.d/init.sh:ro
 volumes:
   pg-data:

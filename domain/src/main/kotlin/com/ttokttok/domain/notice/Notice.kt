@@ -8,6 +8,7 @@ import com.ttokttok.domain.common.InvalidInputException
 import com.ttokttok.domain.common.StudentId
 import com.ttokttok.domain.common.UserId
 import com.ttokttok.domain.common.Uuid7
+import com.ttokttok.domain.file.FileId
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -56,11 +57,14 @@ data class Notice(
     val sentAt: Instant? = null,
     val lastResentAt: Instant? = null,
     val createdAt: Instant,
+    /** 첨부 (이미지·PDF, 최대 10개). 파일 검증은 애플리케이션에서 */
+    val attachments: List<FileId> = emptyList(),
 ) {
     init {
         if (title.isBlank() || title.length > MAX_TITLE) throw InvalidInputException("INVALID_TITLE", "제목은 1~${MAX_TITLE}자입니다")
         if (body.isBlank() || body.length > MAX_BODY) throw InvalidInputException("INVALID_BODY", "본문은 1~${MAX_BODY}자입니다")
         if (targets.isEmpty()) throw InvalidInputException("TARGET_REQUIRED", "받는 대상을 하나 이상 지정하세요")
+        if (attachments.size > MAX_ATTACHMENTS) throw InvalidInputException("TOO_MANY_ATTACHMENTS", "첨부는 최대 ${MAX_ATTACHMENTS}개입니다")
         if (targets.size > MAX_TARGETS) throw InvalidInputException("TOO_MANY_TARGETS", "대상은 최대 ${MAX_TARGETS}개입니다")
         if (kind == NoticeKind.ANNOUNCEMENT && targets != listOf(NoticeTarget.all()))
             throw InvalidInputException("ANNOUNCEMENT_TARGET", "전체 공지는 기관 전체 대상으로만 보낼 수 있습니다")
@@ -73,9 +77,15 @@ data class Notice(
     fun isDue(now: Instant) = status == NoticeStatus.SCHEDULED && !scheduledAt.isAfter(now)
 
     /** 예약 상태에서만 수정 가능. 발송된 알림장은 수정 불가(수신 스냅샷과 어긋남) */
-    fun edit(title: String, body: String, pinned: Boolean, targets: List<NoticeTarget>, sendAt: Instant?, now: Instant): Notice {
+    fun edit(
+        title: String, body: String, pinned: Boolean, targets: List<NoticeTarget>, sendAt: Instant?, now: Instant,
+        attachments: List<FileId> = this.attachments,
+    ): Notice {
         requireScheduled("수정")
-        return copy(title = title.trim(), body = body.trim(), pinned = pinned, targets = targets.distinct(), scheduledAt = resolveSendAt(sendAt, now))
+        return copy(
+            title = title.trim(), body = body.trim(), pinned = pinned, targets = targets.distinct(),
+            scheduledAt = resolveSendAt(sendAt, now), attachments = attachments.distinct(),
+        )
     }
 
     fun cancel(): Notice {
@@ -108,6 +118,7 @@ data class Notice(
         const val MAX_TITLE = 100
         const val MAX_BODY = 5000
         const val MAX_TARGETS = 200
+        const val MAX_ATTACHMENTS = 10
         val RESEND_COOLDOWN: Duration = Duration.ofMinutes(30)
         val MAX_SCHEDULE_AHEAD: Duration = Duration.ofDays(30)
 
@@ -115,10 +126,12 @@ data class Notice(
         fun compose(
             institutionId: InstitutionId, author: UserId, kind: NoticeKind, title: String, body: String,
             pinned: Boolean, targets: List<NoticeTarget>, sendAt: Instant?, now: Instant,
+            attachments: List<FileId> = emptyList(),
         ) = Notice(
             id = NoticeId.new(), institutionId = institutionId, authorId = author, kind = kind,
             title = title.trim(), body = body.trim(), pinned = pinned, targets = targets.distinct(),
             status = NoticeStatus.SCHEDULED, scheduledAt = resolveSendAt(sendAt, now), createdAt = now,
+            attachments = attachments.distinct(),
         )
 
         private fun resolveSendAt(sendAt: Instant?, now: Instant): Instant {

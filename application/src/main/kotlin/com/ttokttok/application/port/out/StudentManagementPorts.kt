@@ -85,4 +85,5 @@ interface SendAlimtalkPort {
 interface AppLinksPort {
     fun joinUrl(token: String): String
     fun appInstallUrl(): String
+    fun staffInviteUrl(token: String): String
 }

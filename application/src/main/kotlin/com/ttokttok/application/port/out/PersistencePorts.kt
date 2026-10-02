@@ -99,7 +99,10 @@ interface DestinationPort {
     fun save(destination: Destination): Destination
     fun find(id: DestinationId, institutionId: InstitutionId): Destination?
     fun findAllByIds(ids: Collection<DestinationId>): List<Destination>
+    /** 삭제되지 않은 목적지만 */
     fun findByInstitution(institutionId: InstitutionId): List<Destination>
+    /** 출결 기록이 참조하므로 소프트 삭제 (findAllByIds 로는 계속 조회됨) */
+    fun softDelete(id: DestinationId, institutionId: InstitutionId, at: Instant)
 }
 
 interface AttendancePort {
@@ -130,4 +133,6 @@ interface DeviceTokenPort {
     fun upsert(token: DeviceToken)
     fun findByUsers(userIds: Collection<UserId>, flavor: AppFlavor): List<DeviceToken>
     fun deleteTokens(tokens: Collection<String>)
+    /** 로그아웃·앱 삭제 시 본인 토큰 해제 */
+    fun deleteForUser(userId: UserId, token: String)
 }

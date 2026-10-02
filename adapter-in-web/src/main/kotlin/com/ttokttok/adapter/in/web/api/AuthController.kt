@@ -5,6 +5,7 @@ import com.ttokttok.application.port.`in`.AuthenticatedUser
 import com.ttokttok.application.port.`in`.LoadAuthenticatedUserQuery
 import com.ttokttok.application.port.`in`.LoginUseCase
 import com.ttokttok.application.port.`in`.RegisterParentUseCase
+import com.ttokttok.application.port.`in`.SessionUseCase
 import com.ttokttok.application.port.`in`.SignUpInstitutionUseCase
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
@@ -25,6 +26,7 @@ class AuthController(
     private val login: LoginUseCase,
     private val loadUser: LoadAuthenticatedUserQuery,
     private val tokens: TokenService,
+    private val sessions: SessionUseCase,
 ) {
     data class InstitutionSignUpRequest(
         @field:NotBlank @field:Size(max = 100) val institutionName: String,
@@ -66,14 +68,26 @@ class AuthController(
     fun login(@Valid @RequestBody req: LoginRequest): AuthResponse =
         respond(login.login(LoginUseCase.Command(req.loginId, req.password)), req.rememberMe)
 
+    /** 회전: 쓴 refresh 는 폐기하고 새 쌍을 준다. 폐기된 refresh 재사용 시 그 로그인 계열 전체 폐기 */
     @PostMapping("/refresh")
     fun refresh(@Valid @RequestBody req: RefreshRequest): AuthResponse {
-        val (userId, rememberMe) = tokens.parseRefresh(req.refreshToken)
-        return respond(loadUser.load(userId), rememberMe)
+        val claims = tokens.parseRefresh(req.refreshToken)
+        val session = sessions.rotate(claims.jti, claims.userId)
+        return issue(loadUser.load(claims.userId), session)
     }
 
-    private fun respond(user: AuthenticatedUser, rememberMe: Boolean): AuthResponse {
-        val pair = tokens.issue(user.userId, rememberMe)
+    /** 이 기기 로그아웃 — refresh 폐기 (access 는 15분 내 자연 만료) */
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun logout(@Valid @RequestBody req: RefreshRequest) {
+        val claims = runCatching { tokens.parseRefresh(req.refreshToken) }.getOrNull() ?: return
+        sessions.end(claims.jti)
+    }
+
+    private fun respond(user: AuthenticatedUser, rememberMe: Boolean): AuthResponse = issue(user, sessions.start(user.userId, rememberMe))
+
+    private fun issue(user: AuthenticatedUser, session: SessionUseCase.Session): AuthResponse {
+        val pair = tokens.issue(user.userId, session.rememberMe, session.jti, session.expiresAt)
         return AuthResponse(pair.accessToken, pair.refreshToken, pair.accessExpiresAt, user.toResponse())
     }
 }

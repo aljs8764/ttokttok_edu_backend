@@ -1,6 +1,7 @@
 package com.ttokttok.application.port.`in`
 
 import com.ttokttok.domain.classroom.Classroom
+import com.ttokttok.domain.common.DestinationId
 import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.UserId
 import com.ttokttok.domain.destination.Destination
@@ -26,5 +27,9 @@ interface ListClassroomsQuery {
 interface ManageDestinationUseCase {
     fun create(command: CreateCommand): Destination
     fun list(actor: UserId, institutionId: InstitutionId): List<Destination>
+    fun update(actor: UserId, institutionId: InstitutionId, id: DestinationId, name: String, type: DestinationType): Destination
+    fun delete(actor: UserId, institutionId: InstitutionId, id: DestinationId)
+    /** 교사 앱에 보이는 순서 — 전달한 순서대로 0,1,2… */
+    fun reorder(actor: UserId, institutionId: InstitutionId, orderedIds: List<DestinationId>): List<Destination>
     data class CreateCommand(val actor: UserId, val institutionId: InstitutionId, val name: String, val type: DestinationType, val sortOrder: Int)
 }

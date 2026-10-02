@@ -161,6 +161,7 @@ class AttendanceManagementController(
                         mapOf(
                             "date" to date, "dayId" to cell.dayId.value, "mark" to cell.mark.symbol,
                             "isLate" to cell.isLate, "isEarlyLeave" to cell.isEarlyLeave, "absenceReason" to cell.absenceReason,
+                            "evidenceFileId" to cell.evidenceFileId?.value,
                         )
                     },
                 )

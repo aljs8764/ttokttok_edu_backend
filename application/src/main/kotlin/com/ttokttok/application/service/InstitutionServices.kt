@@ -56,6 +56,7 @@ class ListClassroomsService(
 class ManageDestinationService(
     private val guard: AccessGuard,
     private val destinations: DestinationPort,
+    private val clock: com.ttokttok.application.port.out.ClockPort,
 ) : ManageDestinationUseCase {
     @Transactional
     override fun create(command: ManageDestinationUseCase.CreateCommand): Destination {
@@ -67,5 +68,29 @@ class ManageDestinationService(
     override fun list(actor: UserId, institutionId: InstitutionId): List<Destination> {
         guard.requireStaff(actor, institutionId)
         return destinations.findByInstitution(institutionId).sortedWith(compareBy({ it.sortOrder }, { it.name }))
+    }
+
+    @Transactional
+    override fun update(actor: UserId, institutionId: InstitutionId, id: DestinationId, name: String, type: com.ttokttok.domain.destination.DestinationType): Destination {
+        guard.requireManager(actor, institutionId)
+        val d = destinations.findByInstitution(institutionId).firstOrNull { it.id == id } ?: throw com.ttokttok.domain.common.NotFoundException("목적지")
+        return destinations.save(d.rename(name, type))
+    }
+
+    /** 지난 하원 기록의 목적지 이름은 그대로 보이도록 소프트 삭제 */
+    @Transactional
+    override fun delete(actor: UserId, institutionId: InstitutionId, id: DestinationId) {
+        guard.requireManager(actor, institutionId)
+        if (destinations.findByInstitution(institutionId).none { it.id == id }) throw com.ttokttok.domain.common.NotFoundException("목적지")
+        destinations.softDelete(id, institutionId, clock.now())
+    }
+
+    @Transactional
+    override fun reorder(actor: UserId, institutionId: InstitutionId, orderedIds: List<DestinationId>): List<Destination> {
+        guard.requireManager(actor, institutionId)
+        val current = destinations.findByInstitution(institutionId).associateBy { it.id }
+        if (orderedIds.toSet() != current.keys || orderedIds.size != current.size)
+            throw InvalidInputException("INVALID_ORDER", "현재 목적지 전체를 한 번씩 담아 보내야 합니다")
+        return orderedIds.mapIndexed { i, id -> destinations.save(current.getValue(id).copy(sortOrder = i)) }
     }
 }
