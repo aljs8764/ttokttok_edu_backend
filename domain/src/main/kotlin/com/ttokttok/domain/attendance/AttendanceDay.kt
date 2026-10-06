@@ -22,7 +22,7 @@ import java.time.ZoneId
 enum class AttendanceStatus { SCHEDULED, IN, OUT, ABSENT }
 
 enum class AttendanceEventType { CHECK_IN, CHECK_OUT, STATUS_CHANGE }
-enum class AttendanceSource { TEACHER_APP, ADMIN_WEB, SYSTEM }
+enum class AttendanceSource { TEACHER_APP, ADMIN_WEB, SYSTEM, STUDENT_APP }
 
 /** 월간 출석부 표기 (ATT-003): O 출석, △ 지각·조퇴, X 결석 */
 enum class MonthlyMark(val symbol: String) { O("O"), TRIANGLE("△"), X("X"), NONE("") }

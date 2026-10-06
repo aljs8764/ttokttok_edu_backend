@@ -93,7 +93,7 @@ class DashboardService(
         val days = attendance.findDaysByIds(events.map { it.attendanceDayId }.toSet()).associateBy { it.id }
         val names = students.findAllByIds(events.map { it.studentId }.toSet()).associate { it.id to it.name }
         val dests = destinations.findAllByIds(events.mapNotNull { it.destinationId }.toSet()).associate { it.id to it.name }
-        val actors = events.map { it.actorId }.toSet().associateWith { id -> if (id == SYSTEM_ACTOR) "시스템" else users.findById(id)?.name ?: "(알 수 없음)" }
+        val actors = events.map { it.actorId }.toSet().associateWith { id -> actorDisplayName(id) { users.findById(it)?.name } }
 
         return events.map { e ->
             val day = days[e.attendanceDayId]

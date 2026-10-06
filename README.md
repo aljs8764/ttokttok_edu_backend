@@ -174,12 +174,36 @@ docker compose up -d                          # postgres(ttok, ttok_test) + redi
 refresh 토큰은 쓸 때마다 회전한다(`refresh_token` 테이블). 이미 회전된 토큰이 다시 오면 탈취로 보고 같은 로그인 계열을 모두 폐기한다.
 비밀번호 변경·임시 비밀번호 발급 시 기존 세션을 모두 폐기한다. 알림장 생성 API는 `attachments`(파일 id)를 받는다.
 
+## 학생앱 QR 출석 API (스펙 7-7)
+
+학생은 계정이 없다. 보호자가 학부모앱에서 만든 8자리 연결 코드를 학생앱에 넣으면 기기 토큰이 발급되고,
+학생 API 는 `X-Device-Token` 헤더로 인증한다(JWT 아님). 스캔은 교사 원터치와 같은 출결 흐름(행 잠금·Outbox·STOMP)을 타고 출처만 `STUDENT_APP`.
+
+| Method | Path | 권한 | 설명 |
+| --- | --- | --- | --- |
+| GET/POST | /api/v1/checkin-qrs | ADMIN+ | QR-001 출석 QR 목록·만들기(기관당 20개). 응답 `content` 를 QR 로 인쇄 |
+| PATCH/DELETE | /api/v1/checkin-qrs/{id} | ADMIN+ | 이름 변경·삭제(비활성) |
+| POST | /api/v1/checkin-qrs/{id}/rotate | ADMIN+ | 토큰 재발급 — 이전 인쇄물 즉시 무효 |
+| GET | /api/v1/checkin-qrs/failures | ADMIN+ | 최근 7일 스캔 실패(QR_INVALID·OUT_OF_RANGE·NO_CLASS_NOW·LOCATION_REQUIRED·NOT_ENROLLED) |
+| GET/PUT | /api/v1/institution/geofence | 교직원 / OWNER | QR-002 기관 위치 `{latitude, longitude, radiusMeters}`(30~1000m). 본문 없이 PUT = 위치 확인 끔 |
+| POST | /api/v1/me/children/{id}/device-links | 학부모 | PAR-007 기기 연결 코드(8자리, 10분, 1회) |
+| GET/DELETE | /api/v1/me/children/{id}/devices[/{deviceId}] | 학부모 | 연결된 학생 기기 목록·해제 (자녀당 최대 3대, 넘으면 오래된 기기 자동 해제) |
+| POST | /api/v1/student/link | 공개(Rate limit) | STD-001 `{code, deviceName}` → `{deviceToken, student, institution}` |
+| GET | /api/v1/student/me | 기기 토큰 | STD-002 오늘 수업·출결 |
+| POST | /api/v1/student/scan | 기기 토큰 | `{qr, latitude, longitude, accuracy, destinationId?, clientAt}` + Idempotency-Key → `outcome` CHECKED_IN·CHECKED_OUT·CHOOSE_DESTINATION(목적지 목록 포함)·ALREADY_DONE. 실패는 `422 {code: 사유}` |
+| POST | /api/v1/student/logout | 기기 토큰 | 이 기기 연결 해제 |
+
+- 위치: (거리 − GPS 정확도[최대 100m]) ≤ 반경. 기관 위치를 설정하지 않으면 위치 확인 생략. 좌표는 저장하지 않고 실패 시 거리(m)만 `qr_scan_log` 에 남긴다.
+- 반 고르기: 등원 중인 반 → 하원 / 시작 60분 전~종료 사이 반 → 등원 / 오늘 남은 가장 가까운 반 → 등원.
+- 하원 목적지: 기관 목적지가 하나면 자동, 여럿이면 `CHOOSE_DESTINATION` 응답 후 같은 Idempotency-Key 를 새로 만들어 `destinationId` 와 다시 보낸다.
+- QR 내용: `${QR_BASE_URL}{token}` (기본 https://ttok.app/qr/). 일반 카메라로 찍으면 앱 안내 페이지.
+
 ## 보안·운영
 
 | 항목 | 내용 |
 | --- | --- |
 | 로그인 잠금 | 계정당 5회 실패 시 10분 잠금(`409 ACCOUNT_LOCKED`), 성공 시 초기화. 남은 횟수는 알려주지 않음(계정 존재 비노출) |
-| Rate limit | 로그인·임시 비밀번호·초대 링크 제출·교직원 초대 수락: IP당 분당 10회(`429`). 인스턴스 메모리 기준 |
+| Rate limit | 로그인·임시 비밀번호·초대 링크 제출·교직원 초대 수락·학생 기기 연결: IP당 분당 10회(`429`). 인스턴스 메모리 기준 |
 | 감사 로그 조회 | `GET /api/v1/audit-logs?action&actorId&from&to&page&size` (OWNER, 최신순) |
 | 미확정 파일 정리 | 매일 03:30, 업로드 요청 후 24시간 지나도 complete 안 된 파일을 S3·DB에서 삭제 |
 | 메일 발송 | `EMAIL_MODE=ses` + `EMAIL_FROM` (SES 도메인 인증 필요). 기본 log |

@@ -48,6 +48,7 @@ ttok:
     join-base-url: ${JOIN_BASE_URL:https://ttok.app/join/}
     app-install-url: ${APP_INSTALL_URL:https://ttok.app/download}
     staff-invite-base-url: ${STAFF_INVITE_BASE_URL:https://admin.ttok.app/invite/}
+    qr-base-url: ${QR_BASE_URL:https://ttok.app/qr/}
   alimtalk:
     mode: ${ALIMTALK_MODE:log}
   email:

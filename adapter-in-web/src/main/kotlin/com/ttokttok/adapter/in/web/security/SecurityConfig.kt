@@ -54,6 +54,8 @@ class SecurityConfig(@Value("\${ttok.jwt.secret}") secretB64: String) {
                     .requestMatchers("/api/v1/join/**").permitAll()
                     .requestMatchers("/api/v1/staff-invitations/*", "/api/v1/staff-invitations/*/accept").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/terms").permitAll()
+                    // 학생앱: 계정이 없어 JWT 대신 X-Device-Token 을 컨트롤러(유스케이스)에서 확인 (스펙 7-7)
+                    .requestMatchers("/api/v1/student/**").permitAll()
                     .requestMatchers("/ws/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                     .anyRequest().authenticated()
             }

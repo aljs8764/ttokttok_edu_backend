@@ -37,7 +37,7 @@ class AuditLogQueryService(
         if (from != null && to != null && from.isAfter(to)) throw InvalidInputException("INVALID_RANGE", "기간이 올바르지 않습니다")
         val result = audit.search(AuditSearchCriteria(institutionId, action?.trim()?.uppercase()?.ifEmpty { null }, actorFilter, from, to, page, size))
         val names = result.items.map { it.entry.actorId }.distinct()
-            .associateWith { id -> if (id == SYSTEM_ACTOR) "시스템" else users.findById(id)?.name ?: "(알 수 없음)" }
+            .associateWith { id -> actorDisplayName(id) { users.findById(it)?.name } }
         return result.map { r ->
             AuditLogView(r.id, r.entry.action, r.entry.resource, r.entry.resourceId, r.entry.actorId, names.getValue(r.entry.actorId), r.entry.diff, r.entry.at)
         }

@@ -86,4 +86,6 @@ interface AppLinksPort {
     fun joinUrl(token: String): String
     fun appInstallUrl(): String
     fun staffInviteUrl(token: String): String
+    /** 출석 QR 에 담는 문자열 (일반 카메라로 찍으면 앱 안내 페이지) */
+    fun checkinQrUrl(token: String): String
 }

@@ -39,6 +39,16 @@ import java.util.UUID
 /** 시스템(배치) 행위자 — 감사 로그에서 사람과 구분 */
 val SYSTEM_ACTOR = UserId(UUID(0, 0))
 
+/** 학생앱 QR 출석 행위자 — 학생은 계정이 없어 고정 id 로 남기고 화면에는 "학생(QR)" 으로 보인다 */
+val STUDENT_QR_ACTOR = UserId(UUID(0, 1))
+
+/** 이벤트 행위자 이름 (타임라인·감사 화면) */
+fun actorDisplayName(id: UserId, lookup: (UserId) -> String?): String = when (id) {
+    SYSTEM_ACTOR -> "시스템"
+    STUDENT_QR_ACTOR -> "학생(QR)"
+    else -> lookup(id) ?: "(알 수 없음)"
+}
+
 /** 오프라인 큐로 늦게 도착한 요청: 서버 시각과 10분 이내면 client 시각 채택 (스펙 7-1) */
 private val CLIENT_SKEW_TOLERANCE: Duration = Duration.ofMinutes(10)
 
@@ -66,6 +76,15 @@ class AttendanceCommandSupport(
 
     fun load(actor: UserId, institutionId: InstitutionId, studentId: StudentId, classroomId: ClassroomId, clientAt: Instant?): Context {
         val classroom = guard.requireClassroomAccess(actor, institutionId, classroomId)
+        return loadFor(classroom, institutionId, studentId, clientAt)
+    }
+
+    /** 학생앱 QR — 기기 토큰·QR·위치 확인을 마친 뒤 부른다 (교직원 권한 확인 없음) */
+    fun loadForStudent(classroom: Classroom, studentId: StudentId, clientAt: Instant?): Context =
+        loadFor(classroom, classroom.institutionId, studentId, clientAt)
+
+    private fun loadFor(classroom: Classroom, institutionId: InstitutionId, studentId: StudentId, clientAt: Instant?): Context {
+        val classroomId = classroom.id
         val student = students.find(studentId, institutionId) ?: throw NotFoundException("원생")
         if (enrollments.findCurrent(studentId).none { it.classroomId == classroomId }) throw ForbiddenException("이 반에 소속된 원생이 아닙니다")
         val institution = institutions.findById(institutionId) ?: throw NotFoundException("기관")

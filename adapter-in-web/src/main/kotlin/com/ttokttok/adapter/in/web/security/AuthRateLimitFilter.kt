@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 공개 인증 API Rate limit (스펙 8장: 로그인 IP당 10회/분).
- * 대상: 로그인·임시 비밀번호·초대 링크 제출·교직원 초대 수락 (무차별 대입 표면).
+ * 대상: 로그인·임시 비밀번호·초대 링크 제출·교직원 초대 수락·학생 기기 연결 코드 (무차별 대입 표면).
  * 고정 1분 창, 인스턴스 메모리 기준 — API 를 여러 대로 늘리면 Redis 카운터로 교체.
  * 클라이언트 IP 는 server.forward-headers-strategy=native 로 ALB 의 X-Forwarded-For 를 반영한 remoteAddr.
  */
@@ -59,6 +59,7 @@ class AuthRateLimitFilter(
             Regex("^/api/v1/auth/password/temp$"),
             Regex("^/api/v1/join/[^/]+$"),
             Regex("^/api/v1/staff-invitations/[^/]+/accept$"),
+            Regex("^/api/v1/student/link$"),
         )
     }
 }

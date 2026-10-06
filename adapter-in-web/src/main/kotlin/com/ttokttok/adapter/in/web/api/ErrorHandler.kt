@@ -1,5 +1,6 @@
 package com.ttokttok.adapter.`in`.web.api
 
+import com.ttokttok.application.port.`in`.QrScanException
 import com.ttokttok.domain.common.ConflictException
 import com.ttokttok.domain.common.DomainException
 import com.ttokttok.domain.common.ForbiddenException
@@ -35,6 +36,11 @@ class ErrorHandler {
         }
         return ResponseEntity.status(status).body(ErrorResponse(e.code, e.message ?: ""))
     }
+
+    /** 학생앱 QR 스캔 실패 — 코드(QR_INVALID·OUT_OF_RANGE·NO_CLASS_NOW …)로 앱이 안내를 고른다 */
+    @ExceptionHandler(QrScanException::class)
+    fun qrScan(e: QrScanException) =
+        ResponseEntity.unprocessableEntity().body(ErrorResponse(e.reason.name, e.message ?: ""))
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun validation(e: MethodArgumentNotValidException) = ResponseEntity.badRequest().body(
