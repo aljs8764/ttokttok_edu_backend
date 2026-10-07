@@ -62,4 +62,6 @@ interface RealtimePort {
     fun institutionEvent(institutionId: InstitutionId, payload: Map<String, Any?>) = Unit
     /** 특정 사용자의 개인 큐(/user/queue/events)로 보내는 이벤트 — 교사 앱이 본인이 쓴 알림장·행사의 수신·응답 변화를 받는 용도 */
     fun userEvent(userId: UserId, payload: Map<String, Any?>) = Unit
+    /** 여러 사용자의 개인 큐로 같은 이벤트 — 학부모 앱이 출결·알림장·행사 변화를 받는 용도 (type: attendance.changed·notice.new·event.changed) */
+    fun userEvents(userIds: Collection<UserId>, payload: Map<String, Any?>) = userIds.forEach { userEvent(it, payload) }
 }

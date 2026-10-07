@@ -4,6 +4,7 @@
 
 ## 백엔드 상태
 - 코드: Kotlin 2.1 + Spring Boot 3.4, 헥사고날 멀티모듈. Phase1 전 범위(S1~S12)와 보안·운영 강화, 학생 QR 출석 코드 작성 완료
+  - d27130a feat(RT): 학부모 실시간 — 개인 큐 `/user/queue/events` 로 `attendance.changed`{studentId,status}(등·하원·수동 정정)·`notice.new`{noticeId,kind}(발송·재발송)·`event.changed`{eventId,kind}(신규·독촉·취소·변경) 전송. `RealtimePort.userEvents(userIds, payload)` 추가, 수신자 = 연결된 보호자 계정. 워커(소켓 없음)에서는 무시되고 푸시가 대신함. 구독은 `/user/` 면 역할 무관 허용이라 WebSocketConfig 변경 없음
   - 19cc5e4 feat(PUSH·RT): 교사용 푸시·실시간 — 작성자 개인 큐 `/user/queue/events` (notice.read·notice.sent·event.responded), TeacherPushRequested(예약 알림장 발송 완료 NOTICE_SCHEDULED_SENT, 행사 자동 독촉 결과 EVENT_AUTO_REMINDED) → 워커가 AppFlavor.TEACHER 기기로 FCM
   - 9ed25a0 docs: ERD V9 반영 / 5e3b418 feat(7-8): 다기관 아이 (child·child_guardian, 기관 종류, 학생앱 기기 아이 단위)
   - afb96bd docs: ERD (draw.io)
@@ -81,6 +82,7 @@
 
 ## 앱 상태 (Flutter, 교사·학부모·학생 단일 코드베이스)
 - 위치: 사용자 PC `C:\workspaces\ttokttok_edu_app` (git main, 원격 저장소 없음)
+  - ace65a2 PAR·RT 학부모앱이 홈에서 `/user/queue/events` 구독 → 타임라인·알림장함·일정 자동 갱신 (0.6초 모아서, 푸시와 같은 갱신 경로). 새 패키지 없음
   - d896074 NTC·PUSH 알림장 목록 필터(종류·상태, 서버 kind·status 파라미터), 교사앱이 개인 큐·푸시를 받아 알림장 목록·상세·행사 집계 자동 갱신, 푸시 탭 → 알림장/행사 상세
   - 3b818e0 NTC 알림장 첨부(PDF 등) 외부 앱으로 열기 — url_launcher 추가 → **flutter pub get 다시**, 길게 누르면 링크 복사
   - 5f882fd ATT-005·006 교사앱 오프라인 큐 (네트워크 없을 때 등·하원을 쌓았다가 POST /attendance/bulk 자동 전송) — 새 패키지 없음
@@ -126,7 +128,7 @@
 - 학부모앱 (모두 /me/* API, 기관 헤더 없음): 로그인·가입, 하단 탭(타임라인·알림장함·일정/행사·더보기, `parentTabProvider`), 자녀 선택, 약관 재동의 게이트
   - 아이 단위 (`Child{childId, name, enrollments[]}`), 상단 칩·필터는 아이 id. 타임라인 맨 위·더보기에 "같은 아이인가요?" 배너 ("다른 아이예요"는 shared_preferences 에 기억)
   - 더보기 → 아이 카드: 다니는 기관 목록(종류·휴원/퇴원), 기관 나누기, 이름 바꾸기, "학생앱 연결"(PAR-007, 아이 단위)
-  - 실시간 소켓 없음(백엔드 /user/queue 미구현) — 앱 복귀·당겨서 새로고침, 앱이 앞에 있을 때 푸시를 받으면 해당 목록 갱신. 첨부 PDF 는 눌러서 외부 앱으로 열기(실패 시 링크 복사)
+  - 실시간: 홈에서 `/user/queue/events` 구독(attendance.changed·notice.new·event.changed → 해당 목록 다시 읽기) + 앱 복귀·당겨서 새로고침, 앱이 앞에 있을 때 푸시를 받아도 갱신. 첨부 PDF 는 눌러서 외부 앱으로 열기(실패 시 링크 복사)
 - 푸시 (`lib/core/push/push_service.dart`, `lib/app/push_navigation.dart`)
   - Firebase 설정 파일이 있어야 켜짐(없으면 로그만 남기고 끔). 학생앱 제외, 교사앱은 작성자 안내 푸시만 받음 (예약 알림장 발송 완료·행사 자동 독촉 결과; 탭 → 알림장/행사 상세)
   - 로그인·세션 복원 시 알림 권한 요청 → `PUT /me/devices {flavor, platform, token}`, 토큰 갱신 시 재등록, 로그아웃 직전 `DELETE /me/devices`. 세션 만료로 튕기면 해제 못 함 (다음 로그인 때 같은 토큰이 새 계정으로 묶임)
@@ -139,12 +141,12 @@
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
 - 앱: Firebase 프로젝트 연결·실기기 푸시 확인, 교사앱 알림장·행사 실기기 확인(카메라·앨범 권한, S3 업로드는 버킷 CORS·localstack 필요), 오프라인 큐 실기기 확인(비행기 모드로 등·하원 → 복구 후 자동 전송), PDF 첨부 열기 실기기 확인, 네이티브 flavor(학생앱 별도 스토어 앱)
 - 앱 알림장·행사에서 미룬 것: PDF 첨부 업로드, 행사 명단 엑셀
-- 교사용 푸시·실시간은 코드 작성만 (빌드·실기기 미검증): 백엔드 빌드 후 개인 큐 구독(관리자 웹 교사 화면은 구독 코드 추가됨, 앱은 TeacherShell; 교사 로그인 → `/user/queue/events`)과 FCM 교사 기기 수신 확인 필요. 학부모용 `/user/queue/events` 는 같은 방식으로 추후 (RealtimePort.userEvent 재사용)
+- 교사용 푸시·실시간은 코드 작성만 (빌드·실기기 미검증): 백엔드 빌드 후 개인 큐 구독(관리자 웹 교사 화면은 구독 코드 추가됨, 앱은 TeacherShell; 교사 로그인 → `/user/queue/events`)과 FCM 교사 기기 수신 확인 필요. 학부모용 `/user/queue/events`(d27130a·ace65a2)도 코드만 — 학부모 로그인 후 소켓 수신 확인 필요
 - 관리자 웹: 실제 백엔드와 연동 점검(응답 필드명·권한). 통계(STAT)는 Phase 2
 - 백엔드
   - ATT-004 교육청 출석부 실제 양식 반영 (Open Issue 5, 원본 양식 확보 대기)
   - 빌드·테스트 검증, GitHub 푸시 (보류)
-  - 미뤄둔 것: 학부모 SMS 인증(Open Issue 1), 알림톡 실제 어댑터(Open Issue 4), 약관 실제 본문(법무), Rate limit·KPI 카운터의 Redis 전환, RLS, 학부모 STOMP(/user/queue/events)
+  - 미뤄둔 것: 학부모 SMS 인증(Open Issue 1), 알림톡 실제 어댑터(Open Issue 4), 약관 실제 본문(법무), Rate limit·KPI 카운터의 Redis 전환, RLS, 학부모 STOMP 는 완료
 
 ## 참고 문서
 - 개발 스펙(Claude Docs): https://claude.ai/code/artifact/7c50ae42-0685-42cf-96e1-86323dea730d

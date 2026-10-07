@@ -150,6 +150,7 @@ class NoticePublisher(
         val userIds = rows.mapNotNull { it.guardianUserId }.distinct()
         if (userIds.isNotEmpty()) {
             outbox.publish(NoticePublished(notice.institutionId, institution.name, notice.id, notice.kind, notice.title, userIds, false, now))
+            realtime.userEvents(userIds, mapOf("type" to "notice.new", "noticeId" to notice.id.value.toString(), "kind" to notice.kind.name))
         }
         // 앱 미설치 보호자: 번호당 한 번만 안내
         targets.filter { s -> byStudent[s.id].orEmpty().none { it.linkStatus == GuardianLinkStatus.LINKED } }
@@ -326,6 +327,7 @@ class ResendUnreadNoticeService(
     private val notices: NoticePort,
     private val recipients: NoticeRecipientPort,
     private val outbox: OutboxPort,
+    private val realtime: RealtimePort,
     private val clock: ClockPort,
 ) : ResendUnreadNoticeUseCase {
 
@@ -345,6 +347,7 @@ class ResendUnreadNoticeService(
         recipients.incrementResent(n.id, unread.filterValues { it.isNotEmpty() }.keys)
         val institution = institutions.findById(institutionId) ?: throw NotFoundException("기관")
         outbox.publish(NoticePublished(institutionId, institution.name, n.id, n.kind, n.title, users, true, now))
+        realtime.userEvents(users, mapOf("type" to "notice.new", "noticeId" to n.id.value.toString(), "kind" to n.kind.name))
         return ResendUnreadNoticeUseCase.ResendResult(unread.count { it.value.isNotEmpty() }, users.size, now)
     }
 }
