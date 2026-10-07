@@ -1,5 +1,7 @@
 # 똑똑 백엔드·관리자 웹·앱 — 인계 메모 (2026-10-07)
 
+> **기준 문서는 백엔드 저장소의 `docs/HANDOFF.md`** (2026-10-07 결정). claude.ai 프로젝트의 `claude/backend/HANDOFF.md` 는 이 날짜 시점의 사본이라 이후 갱신되지 않는다. 진행 상황 갱신은 저장소 쪽에만 한다.
+
 ## 백엔드 상태
 - 코드: Kotlin 2.1 + Spring Boot 3.4, 헥사고날 멀티모듈. Phase1 전 범위(S1~S12)와 보안·운영 강화, 학생 QR 출석 코드 작성 완료
   - 19cc5e4 feat(PUSH·RT): 교사용 푸시·실시간 — 작성자 개인 큐 `/user/queue/events` (notice.read·notice.sent·event.responded), TeacherPushRequested(예약 알림장 발송 완료 NOTICE_SCHEDULED_SENT, 행사 자동 독촉 결과 EVENT_AUTO_REMINDED) → 워커가 AppFlavor.TEACHER 기기로 FCM
