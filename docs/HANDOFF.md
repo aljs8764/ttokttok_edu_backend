@@ -81,6 +81,7 @@
 
 ## 앱 상태 (Flutter, 교사·학부모·학생 단일 코드베이스)
 - 위치: 사용자 PC `C:\workspaces\ttokttok_edu_app` (git main, 원격 저장소 없음)
+  - d051f91 EVT 교사앱 행사 명단 엑셀 — 행사 상세 "명단 엑셀 내보내기" = GET /events/{id}/responses.xlsx 를 임시 폴더에 받아 공유 시트로 열기. path_provider·share_plus 추가 → **flutter pub get 다시**
   - ff199c8 NTC 교사앱 알림장 PDF 첨부 — file_picker 추가 → **flutter pub get 다시**. 첨부 버튼이 사진·PDF 공통(합쳐서 10개, 20MB), 업로드는 사진과 같은 presign→PUT→complete (mime application/pdf, NOTICE_ATTACHMENT 허용 목록에 이미 있음)
   - ace65a2 PAR·RT 학부모앱이 홈에서 `/user/queue/events` 구독 → 타임라인·알림장함·일정 자동 갱신 (0.6초 모아서, 푸시와 같은 갱신 경로). 새 패키지 없음
   - d896074 NTC·PUSH 알림장 목록 필터(종류·상태, 서버 kind·status 파라미터), 교사앱이 개인 큐·푸시를 받아 알림장 목록·상세·행사 집계 자동 갱신, 푸시 탭 → 알림장/행사 상세
@@ -95,7 +96,7 @@
   - 0ed3579 Flutter 앱 기반 + 교사앱 Core
   - pubspec.lock 은 미커밋. pub get 성공 후 커밋 필요
   - 빌드 검증 안 함
-- 스택: Flutter 3.38.1+ (Dart >=3.10), Riverpod 2.6, Dio 5, go_router 14, flutter_secure_storage 9, stomp_dart_client 2, intl 0.20, uuid, mobile_scanner 7, geolocator 14, image_picker 1.1, file_picker 10, url_launcher 6.3, firebase_core 4, firebase_messaging 16, flutter_local_notifications 22
+- 스택: Flutter 3.38.1+ (Dart >=3.10), Riverpod 2.6, Dio 5, go_router 14, flutter_secure_storage 9, stomp_dart_client 2, intl 0.20, uuid, mobile_scanner 7, geolocator 14, image_picker 1.1, file_picker 10, path_provider 2, share_plus 11, url_launcher 6.3, firebase_core 4, firebase_messaging 16, flutter_local_notifications 22
   - 스펙의 Retrofit·freezed 대신 코드 생성 없이 Dio + 손으로 쓴 모델
 - flavor: 진입점 3개 `lib/main_teacher.dart`, `lib/main_parent.dart`, `lib/main_student.dart`. 네이티브 productFlavors/iOS scheme(패키지명·아이콘 분리)은 배포 준비 때
 - 실행: `flutter run -t lib/main_student.dart --dart-define=API_BASE_URL=http://<PC IP>:8080` (카메라·위치 때문에 실기기 권장)
@@ -123,7 +124,7 @@
     - 만들기: 행사명·시작·종료·장소·안내·대상·RSVP(마감 시각·자동 독촉 6/12/24/48/72시간 전). 시각 검사는 웹과 동일 (생성은 시작·마감이 현재 이후, 마감 ≤ 시작)
     - 수정은 대상·RSVP 사용 여부를 바꾸지 못함 (백엔드 UpdateRequest). 상세/수정은 GET /events/{id}/summary 의 event 를 사용 (단건 조회 API 없음)
     - 상세: 참석/불참/미응답 집계 막대, 필터 칩(미응답 먼저), 수동 독촉 POST /events/{id}/remind (remindedAt + 30분 쿨타임, 마감 후·미응답 0명이면 비활성), 행사 취소
-    - 명단 엑셀은 관리자 웹. 응답이 오면 개인 큐 이벤트(event.responded)로 집계 자동 갱신 (TeacherShell 이 0.8초 모아서 다시 읽음), 당겨서 새로고침도 가능
+    - 명단 엑셀은 상세의 "명단 엑셀 내보내기"(공유 시트). 응답이 오면 개인 큐 이벤트(event.responded)로 집계 자동 갱신 (TeacherShell 이 0.8초 모아서 다시 읽음), 당겨서 새로고침도 가능
   - 공통 위젯: `core/widgets/attachment_tile.dart`(학부모·교사 알림장 상세 공유), `pill.dart`, `date_time_field.dart`(날짜→시간 선택)
 - 학부모앱 (모두 /me/* API, 기관 헤더 없음): 로그인·가입, 하단 탭(타임라인·알림장함·일정/행사·더보기, `parentTabProvider`), 자녀 선택, 약관 재동의 게이트
   - 아이 단위 (`Child{childId, name, enrollments[]}`), 상단 칩·필터는 아이 id. 타임라인 맨 위·더보기에 "같은 아이인가요?" 배너 ("다른 아이예요"는 shared_preferences 에 기억)
@@ -140,7 +141,7 @@
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
 - 앱: Firebase 프로젝트 연결·실기기 푸시 확인, 교사앱 알림장·행사 실기기 확인(카메라·앨범 권한, S3 업로드는 버킷 CORS·localstack 필요), 오프라인 큐 실기기 확인(비행기 모드로 등·하원 → 복구 후 자동 전송), PDF 첨부 열기 실기기 확인, 네이티브 flavor(학생앱 별도 스토어 앱)
-- 앱 알림장·행사에서 미룬 것: 행사 명단 엑셀 (PDF 첨부 업로드는 완료, 실기기 확인 필요)
+- 앱 알림장·행사의 PDF 첨부 업로드·행사 명단 엑셀은 완료 (실기기 확인 필요: 파일 선택, 공유 시트)
 - 교사용 푸시·실시간은 코드 작성만 (빌드·실기기 미검증): 백엔드 빌드 후 개인 큐 구독(교사 로그인 → `/user/queue/events`)과 FCM 교사 기기 수신 확인 필요. 학부모용 `/user/queue/events`(d27130a·ace65a2)도 코드만 — 학부모 로그인 후 소켓 수신 확인 필요
 - 관리자 웹: 실제 백엔드와 연동 점검(응답 필드명·권한). 통계(STAT)는 Phase 2
 - 백엔드
