@@ -2,6 +2,7 @@ package com.ttokttok.application.port.`in`
 
 import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.UserId
+import com.ttokttok.domain.institution.InstitutionType
 import com.ttokttok.domain.user.Role
 
 data class AuthenticatedUser(
@@ -16,7 +17,10 @@ data class MembershipView(val institutionId: InstitutionId, val institutionName:
 /** 원장 가입 = 기관 + 계정 + OWNER 소속 생성 (ONB-001 최소형) */
 interface SignUpInstitutionUseCase {
     fun signUp(command: Command): AuthenticatedUser
-    data class Command(val institutionName: String, val ownerName: String, val email: String, val password: String)
+    data class Command(
+        val institutionName: String, val ownerName: String, val email: String, val password: String,
+        val type: InstitutionType = InstitutionType.ACADEMY,
+    )
 }
 
 /** 학부모 가입 (AUTH-003). 같은 번호로 등록된 보호자 매핑을 자동 연결한다. */

@@ -297,10 +297,10 @@ class ParentEventService(
 ) : ParentEventUseCase {
 
     @Transactional(readOnly = true)
-    override fun list(parent: UserId, childId: StudentId?, includePast: Boolean): List<ParentEventItem> {
+    override fun list(parent: UserId, filter: Set<StudentId>?, includePast: Boolean): List<ParentEventItem> {
         val mine = guardians.findLinkedByUser(parent).map { it.studentId }.toSet()
-        if (childId != null && childId !in mine) throw ForbiddenException("본인 자녀가 아닙니다")
-        val kids = childId?.let { setOf(it) } ?: mine
+        if (filter != null && !mine.containsAll(filter)) throw ForbiddenException("본인 자녀가 아닙니다")
+        val kids = filter ?: mine
         if (kids.isEmpty()) return emptyList()
         val now = clock.now()
         val ids = targets.findEventIdsForStudents(kids, if (includePast) null else now.minus(Duration.ofDays(1)), 100)

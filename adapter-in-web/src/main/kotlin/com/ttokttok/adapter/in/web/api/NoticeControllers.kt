@@ -138,7 +138,10 @@ class NoticeController(
 /** 학부모 알림장함 (PAR-004). 기관 헤더 불필요 — 소속 전 기관 */
 @RestController
 @RequestMapping("/api/v1/me/notices")
-class MeNoticeController(private val notices: ParentNoticeUseCase) {
+class MeNoticeController(
+    private val notices: ParentNoticeUseCase,
+    private val children: com.ttokttok.application.port.`in`.GetMyChildrenQuery,
+) {
 
     @GetMapping
     fun inbox(
@@ -146,7 +149,7 @@ class MeNoticeController(private val notices: ParentNoticeUseCase) {
         @RequestParam(required = false) childId: UUID?,
         @RequestParam(required = false) before: Instant?,
         @RequestParam(defaultValue = "20") limit: Int,
-    ) = notices.inbox(jwt.userId(), childId?.let(::StudentId), before, limit).map { it.toResponse() }
+    ) = notices.inbox(jwt.userId(), children.resolveFilter(jwt.userId(), childId), before, limit).map { it.toResponse() }
 
     @GetMapping("/{id}")
     fun detail(@AuthenticationPrincipal jwt: Jwt, @PathVariable id: UUID) = notices.detail(jwt.userId(), NoticeId(id)).toResponse()

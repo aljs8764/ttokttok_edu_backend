@@ -4,6 +4,9 @@ import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.InvalidInputException
 import com.ttokttok.domain.file.FileId
 
+/** 기관 종류 (스펙 7-8). 학교·어린이집 전용 화면은 Phase2, 지금은 구분과 표시만 */
+enum class InstitutionType { ACADEMY, SCHOOL, DAYCARE, OTHER }
+
 data class Institution(
     val id: InstitutionId,
     val name: String,
@@ -17,6 +20,7 @@ data class Institution(
     /** 출석부·안내문에 쓰는 로고·직인 이미지 (SET-001) */
     val logoFileId: FileId? = null,
     val sealFileId: FileId? = null,
+    val type: InstitutionType = InstitutionType.ACADEMY,
 ) {
     init {
         if (name.isBlank()) throw InvalidInputException("INVALID_NAME", "기관명은 필수입니다")

@@ -179,6 +179,7 @@ class ManageGuardianService(
     private val enrollments: EnrollmentPort,
     private val guardians: GuardianPort,
     private val creator: StudentCreator,
+    private val childLinker: ChildLinker,
 ) : ManageGuardianUseCase {
 
     @Transactional
@@ -199,6 +200,7 @@ class ManageGuardianService(
         val s = students.find(studentId, institutionId) ?: throw NotFoundException("원생")
         val g = guardians.find(guardianId, institutionId)?.takeIf { it.studentId == s.id } ?: throw NotFoundException("보호자")
         guardians.save(g.unlink())
+        g.userId?.let { childLinker.onGuardianUnlinked(s, it) }
         return view(s)
     }
 

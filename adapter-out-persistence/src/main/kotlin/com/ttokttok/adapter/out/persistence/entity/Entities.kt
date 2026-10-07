@@ -30,6 +30,7 @@ class InstitutionEntity(
     var phone: String? = null,
     var logoFileId: UUID? = null,
     var sealFileId: UUID? = null,
+    var type: String = "ACADEMY",
 )
 
 @Entity @Table(name = "app_user")
@@ -77,6 +78,7 @@ class StudentEntity(
     var grade: String?,
     var status: String,
     var memo: String? = null,
+    var childId: UUID? = null,
 )
 
 @Entity @Table(name = "enrollment")

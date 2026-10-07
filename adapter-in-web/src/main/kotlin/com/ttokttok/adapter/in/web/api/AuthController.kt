@@ -33,6 +33,7 @@ class AuthController(
         @field:NotBlank @field:Size(max = 50) val ownerName: String,
         @field:NotBlank val email: String,
         @field:NotBlank val password: String,
+        val type: com.ttokttok.domain.institution.InstitutionType = com.ttokttok.domain.institution.InstitutionType.ACADEMY,
     )
 
     data class ParentSignUpRequest(
@@ -56,7 +57,7 @@ class AuthController(
     @PostMapping("/institutions")
     @ResponseStatus(HttpStatus.CREATED)
     fun signUpInstitution(@Valid @RequestBody req: InstitutionSignUpRequest): AuthResponse =
-        respond(signUpInstitution.signUp(SignUpInstitutionUseCase.Command(req.institutionName, req.ownerName, req.email, req.password)), false)
+        respond(signUpInstitution.signUp(SignUpInstitutionUseCase.Command(req.institutionName, req.ownerName, req.email, req.password, req.type)), false)
 
     /** 학부모 가입: 등록된 보호자 번호와 일치하면 자녀 자동 연결 */
     @PostMapping("/parents")

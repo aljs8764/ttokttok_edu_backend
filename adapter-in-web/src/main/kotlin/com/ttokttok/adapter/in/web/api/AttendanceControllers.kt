@@ -99,10 +99,9 @@ class MeController(
 ) {
     data class DeviceRequest(val flavor: AppFlavor, val platform: Platform, @field:NotBlank val token: String)
 
+    /** 아이 단위 (스펙 7-8). 한 아이가 여러 기관에 다니면 enrollments 가 여러 개 */
     @GetMapping("/children")
-    fun children(@AuthenticationPrincipal jwt: Jwt) = children.children(jwt.userId()).map {
-        mapOf("studentId" to it.studentId.value, "name" to it.name, "institutionId" to it.institutionId.value, "institutionName" to it.institutionName)
-    }
+    fun children(@AuthenticationPrincipal jwt: Jwt) = children.children(jwt.userId()).map { it.toResponse() }
 
     /** 통합 안심 타임라인 (PAR-001). 커서 = 마지막 항목의 occurredAt */
     @GetMapping("/timeline")
@@ -111,9 +110,9 @@ class MeController(
         @RequestParam(required = false) childId: UUID?,
         @RequestParam(required = false) before: Instant?,
         @RequestParam(defaultValue = "20") limit: Int,
-    ) = timeline.timeline(jwt.userId(), childId?.let { StudentId(it) }, before, limit).map {
+    ) = timeline.timeline(jwt.userId(), children.resolveFilter(jwt.userId(), childId), before, limit).map {
         mapOf(
-            "studentId" to it.studentId.value, "studentName" to it.studentName,
+            "studentId" to it.studentId.value, "studentName" to it.studentName, "childId" to it.childId?.value,
             "institutionId" to it.institutionId.value, "institutionName" to it.institutionName,
             "type" to it.type.name, "status" to it.status.name, "isLate" to it.isLate,
             "destinationName" to it.destinationName, "occurredAt" to it.occurredAt,
@@ -126,3 +125,16 @@ class MeController(
         devices.register(jwt.userId(), req.flavor, req.platform, req.token)
     }
 }
+
+/** GET /me/children 응답 — ChildControllers 도 같은 모양으로 돌려준다 */
+internal fun com.ttokttok.application.port.`in`.GetMyChildrenQuery.ChildView.toResponse() = mapOf(
+    "childId" to childId.value,
+    "name" to name,
+    "enrollments" to enrollments.map {
+        mapOf(
+            "studentId" to it.studentId.value, "studentName" to it.studentName,
+            "institutionId" to it.institutionId.value, "institutionName" to it.institutionName,
+            "institutionType" to it.institutionType, "status" to it.status,
+        )
+    },
+)

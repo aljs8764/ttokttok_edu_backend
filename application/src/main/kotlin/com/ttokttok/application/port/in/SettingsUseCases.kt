@@ -8,6 +8,7 @@ import com.ttokttok.domain.common.StudentId
 import com.ttokttok.domain.common.UserId
 import com.ttokttok.domain.file.FileId
 import com.ttokttok.domain.file.FilePurpose
+import com.ttokttok.domain.institution.InstitutionType
 import com.ttokttok.domain.staff.StaffInvitationId
 import com.ttokttok.domain.terms.TermsAudience
 import com.ttokttok.domain.terms.TermsId
@@ -33,6 +34,8 @@ interface InstitutionSettingsUseCase {
         val earlyLeaveThresholdMinutes: Int,
         val logoFileId: FileId?,
         val sealFileId: FileId?,
+        /** null = 바꾸지 않음 (스펙 7-8 기관 종류) */
+        val type: InstitutionType? = null,
     )
 }
 
@@ -46,6 +49,7 @@ data class InstitutionView(
     val earlyLeaveThresholdMinutes: Int,
     val logo: FileRef?,
     val seal: FileRef?,
+    val type: InstitutionType,
 )
 
 /** 다운로드 URL 은 5분 만료 */
@@ -105,7 +109,8 @@ interface TermsUseCase {
 
 /** PAR-003 자녀 주간 스케줄: 수업(반 시간표) + 행사 + 그 주 출결 */
 interface ParentScheduleQuery {
-    fun week(parent: UserId, childId: StudentId?, weekStart: LocalDate?): WeekSchedule
+    /** filter: 필터 (GetMyChildrenQuery.resolveFilter), null = 전체 */
+    fun week(parent: UserId, filter: Set<StudentId>?, weekStart: LocalDate?): WeekSchedule
 }
 
 data class WeekSchedule(val weekStart: LocalDate, val children: List<ChildWeek>)

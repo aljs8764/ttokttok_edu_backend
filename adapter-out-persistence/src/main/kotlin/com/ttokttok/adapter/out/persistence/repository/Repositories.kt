@@ -51,6 +51,7 @@ interface ClassroomJpaRepository : JpaRepository<ClassroomEntity, UUID> {
 interface StudentJpaRepository : JpaRepository<StudentEntity, UUID>, JpaSpecificationExecutor<StudentEntity> {
     fun findByIdAndInstitutionId(id: UUID, institutionId: UUID): StudentEntity?
     fun findByInstitutionId(institutionId: UUID): List<StudentEntity>
+    fun findByChildIdIn(childIds: Collection<UUID>): List<StudentEntity>
 }
 
 interface EnrollmentJpaRepository : JpaRepository<EnrollmentEntity, Long> {

@@ -53,7 +53,8 @@ interface PublishDueNoticesUseCase {
 
 /** 학부모 알림장함 (PAR-004) */
 interface ParentNoticeUseCase {
-    fun inbox(parent: UserId, childId: StudentId?, before: Instant?, limit: Int): List<ParentNoticeItem>
+    /** filter: 필터 (GetMyChildrenQuery.resolveFilter), null = 전체 */
+    fun inbox(parent: UserId, filter: Set<StudentId>?, before: Instant?, limit: Int): List<ParentNoticeItem>
     fun detail(parent: UserId, id: NoticeId): ParentNoticeItem
     /** 상세 화면 최초 진입 시 호출. 푸시 수신만으로는 열람이 아니다 */
     fun markRead(parent: UserId, id: NoticeId)

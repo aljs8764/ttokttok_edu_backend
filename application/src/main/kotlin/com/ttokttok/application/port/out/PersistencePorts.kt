@@ -58,6 +58,8 @@ interface StudentPort {
     fun find(id: StudentId, institutionId: InstitutionId): Student?
     fun findAllByIds(ids: Collection<StudentId>): List<Student>
     fun findByInstitution(institutionId: InstitutionId): List<Student>
+    /** 스펙 7-8: 아이의 모든 기관 원생 */
+    fun findByChildren(childIds: Collection<com.ttokttok.domain.child.ChildId>): List<Student>
     /** STU-001 목록: 반·상태 필터, 이름/보호자 번호 뒷 4자리 검색, 페이징 */
     fun search(criteria: StudentSearchCriteria): PageResult<Student>
 }

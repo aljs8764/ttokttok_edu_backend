@@ -5,6 +5,7 @@ import com.ttokttok.application.port.out.GeofencePort
 import com.ttokttok.application.port.out.QrScanLogPort
 import com.ttokttok.application.port.out.StudentDevicePort
 import com.ttokttok.application.port.out.StudentLinkCodePort
+import com.ttokttok.domain.child.ChildId
 import com.ttokttok.domain.common.ClassroomId
 import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.StudentId
@@ -92,8 +93,7 @@ class GeofenceJdbcAdapter(private val jdbc: JdbcTemplate) : GeofencePort {
 class StudentDeviceJdbcAdapter(private val jdbc: JdbcTemplate) : StudentDevicePort {
     private val mapper = RowMapper { rs, _ ->
         StudentDevice(
-            id = StudentDeviceId(rs.uuid("id")), studentId = StudentId(rs.uuid("student_id")),
-            institutionId = InstitutionId(rs.uuid("institution_id")), linkedBy = UserId(rs.uuid("linked_by")),
+            id = StudentDeviceId(rs.uuid("id")), childId = ChildId(rs.uuid("child_id")), linkedBy = UserId(rs.uuid("linked_by")),
             deviceName = rs.getString("device_name"), tokenHash = rs.getString("token_hash"),
             createdAt = rs.instant("created_at"), lastSeenAt = rs.instantOrNull("last_seen_at"), revokedAt = rs.instantOrNull("revoked_at"),
         )
@@ -101,10 +101,10 @@ class StudentDeviceJdbcAdapter(private val jdbc: JdbcTemplate) : StudentDevicePo
 
     override fun save(device: StudentDevice): StudentDevice {
         jdbc.update(
-            """insert into student_device (id, student_id, institution_id, linked_by, device_name, token_hash, created_at, last_seen_at, revoked_at)
-               values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """insert into student_device (id, child_id, linked_by, device_name, token_hash, created_at, last_seen_at, revoked_at)
+               values (?, ?, ?, ?, ?, ?, ?, ?)
                on conflict (id) do update set device_name = excluded.device_name, last_seen_at = excluded.last_seen_at, revoked_at = excluded.revoked_at""",
-            device.id.value, device.studentId.value, device.institutionId.value, device.linkedBy.value, device.deviceName,
+            device.id.value, device.childId.value, device.linkedBy.value, device.deviceName,
             device.tokenHash, Timestamp.from(device.createdAt), device.lastSeenAt.ts(), device.revokedAt.ts(),
         )
         return device
@@ -116,8 +116,12 @@ class StudentDeviceJdbcAdapter(private val jdbc: JdbcTemplate) : StudentDevicePo
     override fun findActiveByTokenHash(tokenHash: String): StudentDevice? =
         jdbc.query("select * from student_device where token_hash = ? and revoked_at is null", mapper, tokenHash).firstOrNull()
 
-    override fun findActiveByStudent(studentId: StudentId): List<StudentDevice> =
-        jdbc.query("select * from student_device where student_id = ? and revoked_at is null", mapper, studentId.value)
+    override fun findActiveByChild(childId: ChildId): List<StudentDevice> =
+        jdbc.query("select * from student_device where child_id = ? and revoked_at is null", mapper, childId.value)
+
+    override fun reassignChild(from: ChildId, to: ChildId) {
+        jdbc.update("update student_device set child_id = ? where child_id = ?", to.value, from.value)
+    }
 
     override fun touch(id: StudentDeviceId, at: Instant) {
         jdbc.update("update student_device set last_seen_at = ? where id = ?", Timestamp.from(at), id.value)
@@ -128,16 +132,16 @@ class StudentDeviceJdbcAdapter(private val jdbc: JdbcTemplate) : StudentDevicePo
 class StudentLinkCodeJdbcAdapter(private val jdbc: JdbcTemplate) : StudentLinkCodePort {
     private val mapper = RowMapper { rs, _ ->
         StudentLinkCode(
-            code = rs.getString("code"), studentId = StudentId(rs.uuid("student_id")), institutionId = InstitutionId(rs.uuid("institution_id")),
+            code = rs.getString("code"), childId = ChildId(rs.uuid("child_id")),
             issuedBy = UserId(rs.uuid("issued_by")), expiresAt = rs.instant("expires_at"), usedAt = rs.instantOrNull("used_at"),
         )
     }
 
     override fun save(code: StudentLinkCode): StudentLinkCode {
         jdbc.update(
-            """insert into student_link_code (code, student_id, institution_id, issued_by, expires_at, used_at) values (?, ?, ?, ?, ?, ?)
+            """insert into student_link_code (code, child_id, issued_by, expires_at, used_at) values (?, ?, ?, ?, ?)
                on conflict (code) do update set used_at = excluded.used_at""",
-            code.code, code.studentId.value, code.institutionId.value, code.issuedBy.value, Timestamp.from(code.expiresAt), code.usedAt.ts(),
+            code.code, code.childId.value, code.issuedBy.value, Timestamp.from(code.expiresAt), code.usedAt.ts(),
         )
         // 오래된 코드 정리 (하루 지난 것)
         jdbc.update("delete from student_link_code where expires_at < now() - interval '1 day'")
@@ -147,6 +151,10 @@ class StudentLinkCodeJdbcAdapter(private val jdbc: JdbcTemplate) : StudentLinkCo
     /** 같은 코드를 두 기기가 동시에 쓰지 못하게 행 잠금 */
     override fun findForUpdate(code: String): StudentLinkCode? =
         jdbc.query("select * from student_link_code where code = ? for update", mapper, code).firstOrNull()
+
+    override fun deleteByChild(childId: ChildId) {
+        jdbc.update("delete from student_link_code where child_id = ?", childId.value)
+    }
 }
 
 @Component
@@ -155,8 +163,8 @@ class QrScanLogJdbcAdapter(private val jdbc: JdbcTemplate) : QrScanLogPort {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     override fun record(log: QrScanLog) {
         jdbc.update(
-            "insert into qr_scan_log (institution_id, student_id, qr_id, classroom_id, outcome, distance_m, at) values (?, ?, ?, ?, ?, ?, ?)",
-            log.institutionId.value, log.studentId.value, log.qrId?.value, log.classroomId?.value, log.outcome, log.distanceMeters, Timestamp.from(log.at),
+            "insert into qr_scan_log (institution_id, student_id, child_id, qr_id, classroom_id, outcome, distance_m, at) values (?, ?, ?, ?, ?, ?, ?, ?)",
+            log.institutionId.value, log.studentId?.value, log.childId?.value, log.qrId?.value, log.classroomId?.value, log.outcome, log.distanceMeters, Timestamp.from(log.at),
         )
     }
 
@@ -165,10 +173,15 @@ class QrScanLogJdbcAdapter(private val jdbc: JdbcTemplate) : QrScanLogPort {
             "select * from qr_scan_log where institution_id = ? and at >= ? order by at desc limit ?",
             RowMapper { rs, _ ->
                 QrScanLog(
-                    InstitutionId(rs.uuid("institution_id")), StudentId(rs.uuid("student_id")), rs.uuidOrNull("qr_id")?.let(::CheckinQrId),
+                    InstitutionId(rs.uuid("institution_id")), rs.uuidOrNull("student_id")?.let(::StudentId),
+                    rs.uuidOrNull("child_id")?.let(::ChildId), rs.uuidOrNull("qr_id")?.let(::CheckinQrId),
                     rs.uuidOrNull("classroom_id")?.let(::ClassroomId), rs.getString("outcome"), rs.intOrNull("distance_m"), rs.instant("at"),
                 )
             },
             institutionId.value, Timestamp.from(since), limit,
         )
+
+    override fun reassignChild(from: ChildId, to: ChildId) {
+        jdbc.update("update qr_scan_log set child_id = ? where child_id = ?", to.value, from.value)
+    }
 }

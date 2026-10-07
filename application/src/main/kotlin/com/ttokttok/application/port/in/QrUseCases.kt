@@ -1,5 +1,6 @@
 package com.ttokttok.application.port.`in`
 
+import com.ttokttok.domain.child.ChildId
 import com.ttokttok.domain.common.DestinationId
 import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.StudentId
@@ -30,14 +31,18 @@ interface CheckinQrAdminUseCase {
 
     /** content = 인쇄할 QR 에 담을 문자열 (https://ttok.app/qr/{token}) */
     data class QrView(val id: CheckinQrId, val name: String, val content: String, val createdAt: Instant, val rotatedAt: Instant?)
-    data class ScanFailureView(val studentId: StudentId, val studentName: String, val reason: String, val distanceMeters: Int?, val at: Instant)
+    /** studentId null = 이 기관에 등록되지 않은 아이가 찍음 */
+    data class ScanFailureView(val studentId: StudentId?, val studentName: String, val reason: String, val distanceMeters: Int?, val at: Instant)
 }
 
-/** PAR-007 보호자: 자녀 기기 연결 코드 발급·연결된 기기 관리 */
+/**
+ * PAR-007 보호자: 아이 기기 연결 코드 발급·연결된 기기 관리.
+ * 기기는 아이에 묶인다 (스펙 7-8) — `id` 는 아이 id, 이전 앱이 보내는 원생 id 도 그 원생의 아이로 받는다.
+ */
 interface StudentDeviceLinkUseCase {
-    fun issueCode(parent: UserId, studentId: StudentId): LinkCodeView
-    fun devices(parent: UserId, studentId: StudentId): List<DeviceView>
-    fun revoke(parent: UserId, studentId: StudentId, deviceId: StudentDeviceId)
+    fun issueCode(parent: UserId, id: java.util.UUID): LinkCodeView
+    fun devices(parent: UserId, id: java.util.UUID): List<DeviceView>
+    fun revoke(parent: UserId, id: java.util.UUID, deviceId: StudentDeviceId)
 
     data class LinkCodeView(val code: String, val expiresAt: Instant)
     data class DeviceView(val id: StudentDeviceId, val deviceName: String, val createdAt: Instant, val lastSeenAt: Instant?)
@@ -54,10 +59,16 @@ interface StudentAppUseCase {
 
     fun logout(deviceToken: String)
 
-    data class LinkedDevice(val deviceToken: String, val studentId: StudentId, val studentName: String, val institutionId: InstitutionId, val institutionName: String)
+    data class InstitutionRef(val id: InstitutionId, val name: String, val type: String)
 
-    data class TodayClass(val classroomId: String, val classroomName: String, val startTime: String, val endTime: String, val attendance: AttendanceView?)
-    data class StudentHome(val studentId: StudentId, val studentName: String, val institutionId: InstitutionId, val institutionName: String, val today: List<TodayClass>)
+    /** 기기는 아이에 묶인다 — 아이가 다니는 모든 기관에서 같은 폰으로 출석 (스펙 7-8) */
+    data class LinkedDevice(val deviceToken: String, val childId: ChildId, val childName: String, val institutions: List<InstitutionRef>)
+
+    data class TodayClass(
+        val institutionId: InstitutionId, val institutionName: String,
+        val classroomId: String, val classroomName: String, val startTime: String, val endTime: String, val attendance: AttendanceView?,
+    )
+    data class StudentHome(val childId: ChildId, val childName: String, val institutions: List<InstitutionRef>, val today: List<TodayClass>)
 
     data class ScanCommand(
         val qrContent: String,
@@ -74,6 +85,7 @@ interface StudentAppUseCase {
     data class ScanResult(
         val outcome: QrScanOutcome,
         val classroomName: String?,
+        val institutionName: String?,
         val attendance: AttendanceView?,
         /** CHOOSE_DESTINATION 일 때 고를 목록 */
         val destinations: List<DestinationOption> = emptyList(),

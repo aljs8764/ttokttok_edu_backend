@@ -56,7 +56,8 @@ interface RemindEventUseCase {
 
 /** PAR-005 RSVP함 · EVT-005 간편 응답 */
 interface ParentEventUseCase {
-    fun list(parent: UserId, childId: StudentId?, includePast: Boolean): List<ParentEventItem>
+    /** filter: 필터 (GetMyChildrenQuery.resolveFilter), null = 전체 */
+    fun list(parent: UserId, filter: Set<StudentId>?, includePast: Boolean): List<ParentEventItem>
     fun respond(parent: UserId, id: SchoolEventId, studentId: StudentId, answer: RsvpAnswer, reason: String?): ParentEventItem
 }
 

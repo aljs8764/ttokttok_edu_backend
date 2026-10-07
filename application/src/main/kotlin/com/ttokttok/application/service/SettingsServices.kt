@@ -147,6 +147,7 @@ class InstitutionSettingsService(
                 address = command.address?.trim()?.ifEmpty { null }, phone = command.phone?.trim()?.ifEmpty { null },
                 lateThresholdMinutes = command.lateThresholdMinutes, earlyLeaveThresholdMinutes = command.earlyLeaveThresholdMinutes,
                 logoFileId = command.logoFileId, sealFileId = command.sealFileId,
+                type = command.type ?: current.type,
             ),
         )
         audit.record(
@@ -165,7 +166,7 @@ class InstitutionSettingsService(
 
     private fun view(i: com.ttokttok.domain.institution.Institution) = InstitutionView(
         i.id, i.name, i.ownerName, i.address, i.phone, i.lateThresholdMinutes, i.earlyLeaveThresholdMinutes,
-        resolver.ref(i.logoFileId, withUrl = true), resolver.ref(i.sealFileId, withUrl = true),
+        resolver.ref(i.logoFileId, withUrl = true), resolver.ref(i.sealFileId, withUrl = true), i.type,
     )
 }
 

@@ -4,7 +4,6 @@ import com.ttokttok.application.port.`in`.CheckinQrAdminUseCase
 import com.ttokttok.application.port.`in`.StudentAppUseCase
 import com.ttokttok.application.port.`in`.StudentDeviceLinkUseCase
 import com.ttokttok.domain.common.DestinationId
-import com.ttokttok.domain.common.StudentId
 import com.ttokttok.domain.qr.CheckinQrId
 import com.ttokttok.domain.qr.Geofence
 import com.ttokttok.domain.qr.StudentDeviceId
@@ -70,7 +69,7 @@ class CheckinQrController(private val qrs: CheckinQrAdminUseCase) {
     @GetMapping("/checkin-qrs/failures")
     fun failures(@AuthenticationPrincipal jwt: Jwt, @RequestHeader(INSTITUTION_HEADER) institutionId: UUID) =
         qrs.recentFailures(jwt.userId(), inst(institutionId)).map {
-            mapOf("studentId" to it.studentId.value, "studentName" to it.studentName, "reason" to it.reason, "distanceMeters" to it.distanceMeters, "at" to it.at)
+            mapOf("studentId" to it.studentId?.value, "studentName" to it.studentName, "reason" to it.reason, "distanceMeters" to it.distanceMeters, "at" to it.at)
         }
 
     @GetMapping("/institution/geofence")
@@ -92,27 +91,27 @@ class CheckinQrController(private val qrs: CheckinQrAdminUseCase) {
     private fun Geofence.toMap() = mapOf("latitude" to latitude, "longitude" to longitude, "radiusMeters" to radiusMeters)
 }
 
-/** PAR-007 보호자: 자녀 기기 연결 */
+/** PAR-007 보호자: 아이 기기 연결. {id} = 아이 id (이전 앱의 원생 id 도 받음) — 스펙 7-8 */
 @RestController
-@RequestMapping("/api/v1/me/children/{studentId}")
+@RequestMapping("/api/v1/me/children/{id}")
 class ChildDeviceController(private val links: StudentDeviceLinkUseCase) {
 
     /** 8자리 연결 코드 (10분, 1회용) — 학생앱에 입력 */
     @PostMapping("/device-links")
     @ResponseStatus(HttpStatus.CREATED)
-    fun issue(@AuthenticationPrincipal jwt: Jwt, @PathVariable studentId: UUID) =
-        links.issueCode(jwt.userId(), StudentId(studentId)).let { mapOf("code" to it.code, "expiresAt" to it.expiresAt) }
+    fun issue(@AuthenticationPrincipal jwt: Jwt, @PathVariable id: UUID) =
+        links.issueCode(jwt.userId(), id).let { mapOf("code" to it.code, "expiresAt" to it.expiresAt) }
 
     @GetMapping("/devices")
-    fun devices(@AuthenticationPrincipal jwt: Jwt, @PathVariable studentId: UUID) =
-        links.devices(jwt.userId(), StudentId(studentId)).map {
+    fun devices(@AuthenticationPrincipal jwt: Jwt, @PathVariable id: UUID) =
+        links.devices(jwt.userId(), id).map {
             mapOf("id" to it.id.value, "deviceName" to it.deviceName, "createdAt" to it.createdAt, "lastSeenAt" to it.lastSeenAt)
         }
 
     @DeleteMapping("/devices/{deviceId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun revoke(@AuthenticationPrincipal jwt: Jwt, @PathVariable studentId: UUID, @PathVariable deviceId: UUID) {
-        links.revoke(jwt.userId(), StudentId(studentId), StudentDeviceId(deviceId))
+    fun revoke(@AuthenticationPrincipal jwt: Jwt, @PathVariable id: UUID, @PathVariable deviceId: UUID) {
+        links.revoke(jwt.userId(), id, StudentDeviceId(deviceId))
     }
 }
 
@@ -135,18 +134,19 @@ class StudentAppController(private val app: StudentAppUseCase) {
     fun link(@Valid @RequestBody req: LinkRequest) = app.link(req.code, req.deviceName).let {
         mapOf(
             "deviceToken" to it.deviceToken,
-            "student" to mapOf("id" to it.studentId.value, "name" to it.studentName),
-            "institution" to mapOf("id" to it.institutionId.value, "name" to it.institutionName),
+            "child" to mapOf("id" to it.childId.value, "name" to it.childName),
+            "institutions" to it.institutions.map { i -> i.toMap() },
         )
     }
 
     @GetMapping("/me")
     fun me(@RequestHeader(DEVICE_TOKEN_HEADER) token: String) = app.me(token).let { h ->
         mapOf(
-            "student" to mapOf("id" to h.studentId.value, "name" to h.studentName),
-            "institution" to mapOf("id" to h.institutionId.value, "name" to h.institutionName),
+            "child" to mapOf("id" to h.childId.value, "name" to h.childName),
+            "institutions" to h.institutions.map { i -> i.toMap() },
             "today" to h.today.map { c ->
                 mapOf(
+                    "institutionId" to c.institutionId.value, "institutionName" to c.institutionName,
                     "classroomId" to c.classroomId, "classroomName" to c.classroomName,
                     "startTime" to c.startTime, "endTime" to c.endTime, "attendance" to c.attendance?.toResponse(),
                 )
@@ -168,6 +168,7 @@ class StudentAppController(private val app: StudentAppUseCase) {
         mapOf(
             "outcome" to r.outcome.name,
             "classroomName" to r.classroomName,
+            "institutionName" to r.institutionName,
             "attendance" to r.attendance?.toResponse(),
             "destinations" to r.destinations.map { mapOf("id" to it.id.value, "name" to it.name, "type" to it.type) },
         )
@@ -178,4 +179,6 @@ class StudentAppController(private val app: StudentAppUseCase) {
     fun logout(@RequestHeader(DEVICE_TOKEN_HEADER) token: String) {
         app.logout(token)
     }
+
+    private fun StudentAppUseCase.InstitutionRef.toMap() = mapOf("id" to id.value, "name" to name, "type" to type)
 }

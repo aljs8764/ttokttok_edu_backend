@@ -1,6 +1,7 @@
 package com.ttokttok.domain.qr
 
 import com.ttokttok.domain.attendance.AttendanceStatus
+import com.ttokttok.domain.child.ChildId
 import com.ttokttok.domain.classroom.Classroom
 import com.ttokttok.domain.common.ClassroomId
 import com.ttokttok.domain.common.ConflictException
@@ -42,7 +43,7 @@ class CheckinQrTest {
 
     @Test
     fun `연결 코드는 한 번만 쓸 수 있고 10분 뒤 만료`() {
-        val code = StudentLinkCode.issue(StudentId.new(), inst, UserId.new(), now)
+        val code = StudentLinkCode.issue(ChildId.new(), UserId.new(), now)
         code.code.length shouldBe StudentLinkCode.LENGTH
         val used = code.use(now.plusSeconds(60))
         shouldThrow<ConflictException> { used.use(now.plusSeconds(61)) }

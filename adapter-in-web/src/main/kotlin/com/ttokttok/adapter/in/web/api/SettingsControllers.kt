@@ -61,6 +61,8 @@ class InstitutionSettingsController(private val settings: InstitutionSettingsUse
         @field:Min(0) @field:Max(120) val earlyLeaveThresholdMinutes: Int = 10,
         val logoFileId: UUID? = null,
         val sealFileId: UUID? = null,
+        /** ACADEMY / SCHOOL / DAYCARE / OTHER, 생략하면 유지 */
+        val type: com.ttokttok.domain.institution.InstitutionType? = null,
     )
 
     @GetMapping
@@ -74,14 +76,14 @@ class InstitutionSettingsController(private val settings: InstitutionSettingsUse
             jwt.userId(), inst(institutionId),
             InstitutionSettingsUseCase.UpdateCommand(
                 req.name, req.ownerName, req.address, req.phone, req.lateThresholdMinutes, req.earlyLeaveThresholdMinutes,
-                req.logoFileId?.let(::FileId), req.sealFileId?.let(::FileId),
+                req.logoFileId?.let(::FileId), req.sealFileId?.let(::FileId), req.type,
             ),
         ).toMap()
 
     private fun com.ttokttok.application.port.`in`.InstitutionView.toMap() = mapOf(
         "id" to id.value, "name" to name, "ownerName" to ownerName, "address" to address, "phone" to phone,
         "lateThresholdMinutes" to lateThresholdMinutes, "earlyLeaveThresholdMinutes" to earlyLeaveThresholdMinutes,
-        "logo" to logo?.toMap(), "seal" to seal?.toMap(),
+        "logo" to logo?.toMap(), "seal" to seal?.toMap(), "type" to type.name,
     )
 }
 
@@ -211,6 +213,7 @@ class TermsController(private val terms: TermsUseCase) {
 @RestController
 @RequestMapping("/api/v1/me")
 class MeSettingsController(
+    private val children: com.ttokttok.application.port.`in`.GetMyChildrenQuery,
     private val schedule: ParentScheduleQuery,
     private val devices: RegisterDeviceUseCase,
     private val sessions: SessionUseCase,
@@ -223,7 +226,7 @@ class MeSettingsController(
         @AuthenticationPrincipal jwt: Jwt,
         @RequestParam(required = false) childId: UUID?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) week: LocalDate?,
-    ) = schedule.week(jwt.userId(), childId?.let(::StudentId), week).let { w ->
+    ) = schedule.week(jwt.userId(), children.resolveFilter(jwt.userId(), childId), week).let { w ->
         mapOf(
             "weekStart" to w.weekStart,
             "children" to w.children.map { c ->

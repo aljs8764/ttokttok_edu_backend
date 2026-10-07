@@ -66,7 +66,7 @@ class SignUpInstitutionService(
         validatePassword(command.password)
         if (users.findByEmail(email) != null) throw ConflictException("EMAIL_TAKEN", "이미 가입된 이메일입니다")
 
-        val institution = institutions.save(Institution(InstitutionId.new(), command.institutionName.trim(), command.ownerName.trim()))
+        val institution = institutions.save(Institution(InstitutionId.new(), command.institutionName.trim(), command.ownerName.trim(), type = command.type))
         val owner = users.save(User(UserId.new(), command.ownerName.trim(), email, null, hasher.hash(command.password)))
         memberships.save(Membership(MembershipId.new(), owner.id, institution.id, Role.OWNER, "원장"))
         return assembler.assemble(owner)
@@ -80,6 +80,8 @@ class RegisterParentService(
     private val memberships: MembershipPort,
     private val hasher: PasswordHasherPort,
     private val assembler: AuthenticatedUserAssembler,
+    private val students: com.ttokttok.application.port.out.StudentPort,
+    private val childLinker: ChildLinker,
 ) : RegisterParentUseCase {
     // TODO(S2): SMS 본인인증 토큰 검증 후에만 가입 허용 (Open Issue #1)
     @Transactional
@@ -88,16 +90,24 @@ class RegisterParentService(
         validatePassword(command.password)
         if (users.findByPhone(phone) != null) throw ConflictException("PHONE_TAKEN", "이미 가입된 휴대폰 번호입니다")
         val parent = users.save(User(UserId.new(), command.name.trim(), null, phone, hasher.hash(command.password)))
-        linkGuardians(parent, phone, guardians, memberships)
+        linkGuardians(parent, phone, guardians, memberships) { g ->
+            students.find(g.studentId, g.institutionId)?.let { childLinker.onGuardianLinked(it, parent.id) }
+        }
         return assembler.assemble(parent)
     }
 }
 
-/** 같은 번호로 등록된 보호자 행을 모두 연결하고, 기관별 PARENT 소속을 만든다. 기관·형제 불문. */
-internal fun linkGuardians(parent: User, phone: PhoneNumber, guardians: GuardianPort, memberships: MembershipPort) {
+/**
+ * 같은 번호로 등록된 보호자 행을 모두 연결하고, 기관별 PARENT 소속을 만든다. 기관·형제 불문.
+ * [onLinked] 로 원생마다 아이를 맞춘다 (스펙 7-8, ChildLinker).
+ */
+internal fun linkGuardians(
+    parent: User, phone: PhoneNumber, guardians: GuardianPort, memberships: MembershipPort,
+    onLinked: (com.ttokttok.domain.student.Guardian) -> Unit = {},
+) {
     // UNLINKED(관리자가 해제한) 매핑은 재가입으로 되살리지 않는다
     guardians.findByPhone(phone).filter { it.linkStatus == com.ttokttok.domain.student.GuardianLinkStatus.PENDING }.forEach { g ->
-        guardians.save(g.linkTo(parent.id))
+        onLinked(guardians.save(g.linkTo(parent.id)))
         if (memberships.find(parent.id, g.institutionId) == null) {
             memberships.save(Membership(MembershipId.new(), parent.id, g.institutionId, Role.PARENT))
         }

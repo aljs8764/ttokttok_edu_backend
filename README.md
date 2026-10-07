@@ -71,7 +71,7 @@ docker compose up -d                          # postgres(ttok, ttok_test) + redi
 | POST/GET | /api/v1/students | ADMIN+ / 교직원 | 원생 등록(반·보호자), 목록(교사는 담당 반, 마스킹) |
 | POST | /api/v1/attendance/check-in · check-out | 담당 교사·ADMIN+ | 원터치 등·하원 |
 | GET | /api/v1/attendance/daily?classId&date | 담당 교사·ADMIN+ | 반 출결 현황 |
-| GET | /api/v1/me/children · /me/timeline | 학부모 | 자녀 목록, 통합 타임라인(커서 `before`) |
+| GET | /api/v1/me/children · /me/timeline | 학부모 | 자녀 목록(아이 단위 + 기관별 `enrollments`, 스펙 7-8), 통합 타임라인(커서 `before`) |
 | PUT | /api/v1/me/devices | 로그인 | FCM 토큰 등록 |
 
 ## S3–4 API (원생·교직원 관리)
@@ -187,9 +187,9 @@ refresh 토큰은 쓸 때마다 회전한다(`refresh_token` 테이블). 이미 
 | GET | /api/v1/checkin-qrs/failures | ADMIN+ | 최근 7일 스캔 실패(QR_INVALID·OUT_OF_RANGE·NO_CLASS_NOW·LOCATION_REQUIRED·NOT_ENROLLED) |
 | GET/PUT | /api/v1/institution/geofence | 교직원 / OWNER | QR-002 기관 위치 `{latitude, longitude, radiusMeters}`(30~1000m). 본문 없이 PUT = 위치 확인 끔 |
 | POST | /api/v1/me/children/{id}/device-links | 학부모 | PAR-007 기기 연결 코드(8자리, 10분, 1회) |
-| GET/DELETE | /api/v1/me/children/{id}/devices[/{deviceId}] | 학부모 | 연결된 학생 기기 목록·해제 (자녀당 최대 3대, 넘으면 오래된 기기 자동 해제) |
-| POST | /api/v1/student/link | 공개(Rate limit) | STD-001 `{code, deviceName}` → `{deviceToken, student, institution}` |
-| GET | /api/v1/student/me | 기기 토큰 | STD-002 오늘 수업·출결 |
+| GET/DELETE | /api/v1/me/children/{id}/devices[/{deviceId}] | 학부모 | 연결된 학생 기기 목록·해제 (아이당 최대 3대, 넘으면 오래된 기기 자동 해제). `{id}` = 아이 id (원생 id 도 받음) |
+| POST | /api/v1/student/link | 공개(Rate limit) | STD-001 `{code, deviceName}` → `{deviceToken, child, institutions[]}` |
+| GET | /api/v1/student/me | 기기 토큰 | STD-002 아이가 다니는 모든 기관의 오늘 수업·출결 (`today[].institutionName`) |
 | POST | /api/v1/student/scan | 기기 토큰 | `{qr, latitude, longitude, accuracy, destinationId?, clientAt}` + Idempotency-Key → `outcome` CHECKED_IN·CHECKED_OUT·CHOOSE_DESTINATION(목적지 목록 포함)·ALREADY_DONE. 실패는 `422 {code: 사유}` |
 | POST | /api/v1/student/logout | 기기 토큰 | 이 기기 연결 해제 |
 
@@ -197,6 +197,25 @@ refresh 토큰은 쓸 때마다 회전한다(`refresh_token` 테이블). 이미 
 - 반 고르기: 등원 중인 반 → 하원 / 시작 60분 전~종료 사이 반 → 등원 / 오늘 남은 가장 가까운 반 → 등원.
 - 하원 목적지: 기관 목적지가 하나면 자동, 여럿이면 `CHOOSE_DESTINATION` 응답 후 같은 Idempotency-Key 를 새로 만들어 `destinationId` 와 다시 보낸다.
 - QR 내용: `${QR_BASE_URL}{token}` (기본 https://ttok.app/qr/). 일반 카메라로 찍으면 앱 안내 페이지.
+- 기기는 아이에 묶인다(V9). 스캔한 QR 의 기관에서 그 아이의 재원 원생을 찾아 처리 → 폰 하나로 모든 학원 출석. 그 기관에 없으면 `NOT_ENROLLED`.
+- 재발급된 옛 QR(`QR_INVALID`)은 기관을 알 수 없어 실패 로그에 남지 않는다.
+
+## 다기관 아이 API (스펙 7-8, V9)
+
+원생(student) = 기관이 관리하는 기관별 기록, 아이(child) = 가족이 관리하는 기관 무관 단위. 다자녀 = 아이 여러 명, 한 아이가 여러 학원·학교 = 원생 여러 개.
+보호자 계정이 원생에 연결될 때(가입·원생 등록·보호자 추가) 아이를 1:1 로 만들고, 같은 아이인지는 보호자가 합친다 (이름·생일로 자동 병합하지 않음).
+학부모 목록 API(`/me/timeline·notices·events·schedule`)의 `childId` 는 아이 id(그 아이의 모든 기관) 또는 원생 id(그 기관만).
+
+| Method | Path | 권한 | 설명 |
+| --- | --- | --- | --- |
+| GET | /api/v1/me/children/merge-suggestions | 학부모 | 이름(공백 무시)·생일이 같은 아이 묶음 → 앱이 "같은 아이인가요?" 확인 |
+| POST | /api/v1/me/children/{childId}/merge | 학부모 | `{sourceChildId}` 의 원생·보호자·학생앱 기기를 이 아이로 합치고 source 삭제 |
+| POST | /api/v1/me/children/{childId}/split | 학부모 | `{studentId}` 기관 하나를 새 아이로 떼어냄 (학생앱 기기는 원래 아이에 남음) |
+| PATCH | /api/v1/me/children/{childId} | 학부모 | `{name}` 보호자 앱 표시 이름 (기관의 원생 이름은 그대로) |
+
+- 기관 종류: `institution.type` ACADEMY·SCHOOL·DAYCARE·OTHER — 원장 가입 `type`, `PUT /institution` 의 `type`(생략 시 유지).
+- 선생님 여러 기관: 기존대로 기관별 `membership`, 앱·웹에서 `X-Institution-Id` 로 전환.
+- 기관 간 격리: 기관 API 는 그 기관 원생만. 아이·합치기는 보호자 API 에서만 다룬다.
 
 ## 보안·운영
 

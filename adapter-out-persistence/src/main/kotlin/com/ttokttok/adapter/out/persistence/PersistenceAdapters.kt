@@ -2,6 +2,7 @@ package com.ttokttok.adapter.out.persistence
 
 import com.ttokttok.adapter.out.persistence.entity.AttendanceDayEntity
 import com.ttokttok.domain.file.FileId
+import com.ttokttok.domain.child.ChildId
 import com.ttokttok.adapter.out.persistence.entity.AttendanceEventEntity
 import com.ttokttok.adapter.out.persistence.entity.ClassroomEntity
 import com.ttokttok.adapter.out.persistence.entity.DestinationEntity
@@ -89,7 +90,7 @@ class InstitutionPersistenceAdapter(private val repo: InstitutionJpaRepository) 
         repo.save(
             InstitutionEntity(
                 institution.id.value, institution.name, institution.ownerName, institution.lateThresholdMinutes, institution.earlyLeaveThresholdMinutes,
-                institution.address, institution.phone, institution.logoFileId?.value, institution.sealFileId?.value,
+                institution.address, institution.phone, institution.logoFileId?.value, institution.sealFileId?.value, institution.type.name,
             ),
         )
         return institution
@@ -99,6 +100,7 @@ class InstitutionPersistenceAdapter(private val repo: InstitutionJpaRepository) 
     private fun InstitutionEntity.toDomain() = Institution(
         InstitutionId(id), name, ownerName, lateThresholdMinutes, earlyLeaveThresholdMinutes,
         address, phone, logoFileId?.let(::FileId), sealFileId?.let(::FileId),
+        com.ttokttok.domain.institution.InstitutionType.valueOf(type),
     )
 }
 
@@ -158,19 +160,27 @@ class ClassroomPersistenceAdapter(private val repo: ClassroomJpaRepository) : Cl
 @Component
 class StudentPersistenceAdapter(private val repo: StudentJpaRepository, private val crypto: FieldCrypto) : StudentPort {
     override fun save(student: Student): Student {
+        // 아이 연결(child_id)은 ChildLinker 가 따로 저장한다. 연결 전에 읽어 둔 원생 객체로 다시 저장해도 지워지지 않게 유지
+        val childId = student.childId?.value ?: repo.findByIdOrNull(student.id.value)?.childId
         repo.save(
             StudentEntity(
                 student.id.value, student.institutionId.value, student.name, crypto.encrypt(student.birthDate.toString()),
-                student.grade, student.status.name, student.memo,
+                student.grade, student.status.name, student.memo, childId,
             ),
         )
-        return student
+        return if (childId != null && student.childId == null) student.copy(childId = ChildId(childId)) else student
     }
     override fun find(id: StudentId, institutionId: InstitutionId) = repo.findByIdAndInstitutionId(id.value, institutionId.value)?.toDomain()
     override fun findAllByIds(ids: Collection<StudentId>) = if (ids.isEmpty()) emptyList() else repo.findAllById(ids.map { it.value }).map { it.toDomain() }
     override fun findByInstitution(institutionId: InstitutionId) = repo.findByInstitutionId(institutionId.value).map { it.toDomain() }
     private fun StudentEntity.toDomain() =
-        Student(StudentId(id), InstitutionId(institutionId), name, LocalDate.parse(crypto.decrypt(birthEnc)), grade, StudentStatus.valueOf(status), memo)
+        Student(
+            StudentId(id), InstitutionId(institutionId), name, LocalDate.parse(crypto.decrypt(birthEnc)), grade, StudentStatus.valueOf(status), memo,
+            childId?.let(::ChildId),
+        )
+
+    override fun findByChildren(childIds: Collection<ChildId>) =
+        if (childIds.isEmpty()) emptyList() else repo.findByChildIdIn(childIds.map { it.value }).map { it.toDomain() }
 
     override fun search(criteria: StudentSearchCriteria): PageResult<Student> {
         if (criteria.classroomIds?.isEmpty() == true) return PageResult(emptyList(), criteria.page, criteria.size, 0)

@@ -53,12 +53,12 @@ class ParentScheduleService(
 ) : ParentScheduleQuery {
 
     @Transactional(readOnly = true)
-    override fun week(parent: UserId, childId: StudentId?, weekStart: LocalDate?): WeekSchedule {
+    override fun week(parent: UserId, filter: Set<StudentId>?, weekStart: LocalDate?): WeekSchedule {
         val monday = (weekStart ?: clock.today()).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         val dates = (0L..6L).map { monday.plusDays(it) }
         val mine = guardians.findLinkedByUser(parent).map { it.studentId }.toSet()
-        if (childId != null && childId !in mine) throw ForbiddenException("본인 자녀가 아닙니다")
-        val kids = students.findAllByIds(childId?.let { setOf(it) } ?: mine).filter { it.status != StudentStatus.WITHDRAWN }
+        if (filter != null && !mine.containsAll(filter)) throw ForbiddenException("본인 자녀가 아닙니다")
+        val kids = students.findAllByIds(filter ?: mine).filter { it.status != StudentStatus.WITHDRAWN }
         val instNames = institutions.findAllByIds(kids.map { it.institutionId }.toSet()).associate { it.id to it.name }
 
         val zone = clock.zone()

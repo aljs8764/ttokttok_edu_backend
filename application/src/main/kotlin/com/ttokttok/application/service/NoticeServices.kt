@@ -373,11 +373,11 @@ class ParentNoticeService(
 ) : ParentNoticeUseCase {
 
     @Transactional(readOnly = true)
-    override fun inbox(parent: UserId, childId: StudentId?, before: Instant?, limit: Int): List<ParentNoticeItem> {
+    override fun inbox(parent: UserId, filter: Set<StudentId>?, before: Instant?, limit: Int): List<ParentNoticeItem> {
         if (limit !in 1..100) throw InvalidInputException("INVALID_LIMIT", "limit은 1~100입니다")
         val mine = guardians.findLinkedByUser(parent).map { it.studentId }.toSet()
-        if (childId != null && childId !in mine) throw ForbiddenException("본인 자녀가 아닙니다")
-        val ids = recipients.findInboxNoticeIds(parent, childId?.let { setOf(it) }, before, limit)
+        if (filter != null && !mine.containsAll(filter)) throw ForbiddenException("본인 자녀가 아닙니다")
+        val ids = recipients.findInboxNoticeIds(parent, filter, before, limit)
         return items(parent, ids, preview = true)
     }
 

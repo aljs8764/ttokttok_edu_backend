@@ -132,7 +132,10 @@ class EventController(
 /** PAR-005 RSVP함 · EVT-005 간편 응답. 기관 헤더 불필요 */
 @RestController
 @RequestMapping("/api/v1/me/events")
-class MeEventController(private val events: ParentEventUseCase) {
+class MeEventController(
+    private val events: ParentEventUseCase,
+    private val children: com.ttokttok.application.port.`in`.GetMyChildrenQuery,
+) {
     data class RespondRequest(val studentId: UUID, val answer: RsvpAnswer, @field:Size(max = 200) val reason: String? = null)
 
     @GetMapping
@@ -140,7 +143,7 @@ class MeEventController(private val events: ParentEventUseCase) {
         @AuthenticationPrincipal jwt: Jwt,
         @RequestParam(required = false) childId: UUID?,
         @RequestParam(defaultValue = "false") includePast: Boolean,
-    ) = events.list(jwt.userId(), childId?.let(::StudentId), includePast).map { it.toResponse() }
+    ) = events.list(jwt.userId(), children.resolveFilter(jwt.userId(), childId), includePast).map { it.toResponse() }
 
     /** 마감 후에는 403 */
     @PutMapping("/{id}/response")

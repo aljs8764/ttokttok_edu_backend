@@ -37,21 +37,6 @@ import java.time.Duration
 import java.time.Instant
 
 @Service
-class GetMyChildrenService(
-    private val guardians: GuardianPort,
-    private val students: StudentPort,
-    private val institutions: InstitutionPort,
-) : GetMyChildrenQuery {
-    @Transactional(readOnly = true)
-    override fun children(parent: UserId): List<GetMyChildrenQuery.ChildView> {
-        val links = guardians.findLinkedByUser(parent)
-        val ss = students.findAllByIds(links.map { it.studentId }.distinct())
-        val names = institutions.findAllByIds(ss.map { it.institutionId }.distinct()).associate { it.id to it.name }
-        return ss.sortedBy { it.name }.map { GetMyChildrenQuery.ChildView(it.id, it.name, it.institutionId, names[it.institutionId] ?: "") }
-    }
-}
-
-@Service
 class GetTimelineService(
     private val guardians: GuardianPort,
     private val students: StudentPort,
@@ -60,12 +45,12 @@ class GetTimelineService(
     private val destinations: DestinationPort,
 ) : GetTimelineQuery {
     @Transactional(readOnly = true)
-    override fun timeline(parent: UserId, studentId: StudentId?, before: Instant?, limit: Int): List<GetTimelineQuery.TimelineItem> {
+    override fun timeline(parent: UserId, filter: Set<StudentId>?, before: Instant?, limit: Int): List<GetTimelineQuery.TimelineItem> {
         if (limit !in 1..100) throw InvalidInputException("INVALID_LIMIT", "limit은 1~100입니다")
         val mine = guardians.findLinkedByUser(parent).map { it.studentId }.toSet()
-        val targets = if (studentId != null) {
-            if (studentId !in mine) throw ForbiddenException("본인 자녀가 아닙니다")
-            setOf(studentId)
+        val targets = if (filter != null) {
+            if (!mine.containsAll(filter)) throw ForbiddenException("본인 자녀가 아닙니다")
+            filter
         } else mine
         if (targets.isEmpty()) return emptyList()
 
@@ -78,7 +63,7 @@ class GetTimelineService(
         return events.map { e ->
             val s = ss.getValue(e.studentId)
             GetTimelineQuery.TimelineItem(
-                studentId = s.id, studentName = s.name,
+                studentId = s.id, studentName = s.name, childId = s.childId,
                 institutionId = s.institutionId, institutionName = insts[s.institutionId]?.name ?: "",
                 type = e.type, status = e.toStatus, isLate = days[e.attendanceDayId]?.isLate ?: false,
                 destinationName = e.destinationId?.let { dests[it]?.name }, occurredAt = e.occurredAt,

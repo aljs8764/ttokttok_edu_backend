@@ -1,6 +1,7 @@
 package com.ttokttok.domain.qr
 
 import com.ttokttok.domain.attendance.AttendanceStatus
+import com.ttokttok.domain.child.ChildId
 import com.ttokttok.domain.classroom.Classroom
 import com.ttokttok.domain.common.ClassroomId
 import com.ttokttok.domain.common.ConflictException
@@ -101,13 +102,13 @@ data class Geofence(val latitude: Double, val longitude: Double, val radiusMeter
 }
 
 /**
- * 학생 기기. 학생은 계정이 없고, 보호자가 연결 코드로 이 기기를 자녀(원생)에 묶는다 (PAR-007 / STD-001).
+ * 학생 기기. 학생은 계정이 없고, 보호자가 연결 코드로 이 기기를 아이에 묶는다 (PAR-007 / STD-001).
+ * 원생(기관 1곳)이 아니라 아이에 묶으므로 폰 하나로 아이가 다니는 모든 기관에서 출석한다 (스펙 7-8).
  * 서버에는 기기 토큰의 SHA-256 만 둔다.
  */
 data class StudentDevice(
     val id: StudentDeviceId,
-    val studentId: StudentId,
-    val institutionId: InstitutionId,
+    val childId: ChildId,
     val linkedBy: UserId,
     val deviceName: String,
     val tokenHash: String,
@@ -120,15 +121,14 @@ data class StudentDevice(
     fun revoke(now: Instant) = if (revokedAt != null) this else copy(revokedAt = now)
 
     companion object {
-        const val MAX_ACTIVE_PER_STUDENT = 3
+        const val MAX_ACTIVE_PER_CHILD = 3
     }
 }
 
 /** 보호자가 만드는 1회용 기기 연결 코드. 헷갈리는 글자(0/O, 1/I/L) 제외 8자, 10분 유효 */
 data class StudentLinkCode(
     val code: String,
-    val studentId: StudentId,
-    val institutionId: InstitutionId,
+    val childId: ChildId,
     val issuedBy: UserId,
     val expiresAt: Instant,
     val usedAt: Instant? = null,
@@ -145,9 +145,9 @@ data class StudentLinkCode(
         private const val ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
         const val LENGTH = 8
 
-        fun issue(studentId: StudentId, institutionId: InstitutionId, issuedBy: UserId, now: Instant): StudentLinkCode {
+        fun issue(childId: ChildId, issuedBy: UserId, now: Instant): StudentLinkCode {
             val code = (1..LENGTH).map { ALPHABET[random.nextInt(ALPHABET.length)] }.joinToString("")
-            return StudentLinkCode(code, studentId, institutionId, issuedBy, now.plus(VALIDITY))
+            return StudentLinkCode(code, childId, issuedBy, now.plus(VALIDITY))
         }
 
         fun normalize(raw: String) = raw.uppercase().filter { it.isLetterOrDigit() }
@@ -183,7 +183,9 @@ enum class QrScanFailure { QR_INVALID, NOT_ENROLLED, OUT_OF_RANGE, NO_CLASS_NOW,
 
 data class QrScanLog(
     val institutionId: InstitutionId,
-    val studentId: StudentId,
+    /** 그 기관에 등록되지 않은 아이면 null (childId 로만 남김) */
+    val studentId: StudentId?,
+    val childId: ChildId?,
     val qrId: CheckinQrId?,
     val classroomId: ClassroomId?,
     val outcome: String,

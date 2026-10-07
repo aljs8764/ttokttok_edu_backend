@@ -1,7 +1,7 @@
 package com.ttokttok.application.port.out
 
+import com.ttokttok.domain.child.ChildId
 import com.ttokttok.domain.common.InstitutionId
-import com.ttokttok.domain.common.StudentId
 import com.ttokttok.domain.qr.CheckinQr
 import com.ttokttok.domain.qr.CheckinQrId
 import com.ttokttok.domain.qr.Geofence
@@ -31,7 +31,9 @@ interface StudentDevicePort {
     fun find(id: StudentDeviceId): StudentDevice?
     /** 해제되지 않은 기기만 */
     fun findActiveByTokenHash(tokenHash: String): StudentDevice?
-    fun findActiveByStudent(studentId: StudentId): List<StudentDevice>
+    fun findActiveByChild(childId: ChildId): List<StudentDevice>
+    /** 아이 합치기: source 아이의 기기를 target 으로 */
+    fun reassignChild(from: ChildId, to: ChildId)
     /** 마지막 사용 시각 — 하루 한 번 정도만 쓰면 되므로 실패해도 무시 */
     fun touch(id: StudentDeviceId, at: Instant)
 }
@@ -39,10 +41,12 @@ interface StudentDevicePort {
 interface StudentLinkCodePort {
     fun save(code: StudentLinkCode): StudentLinkCode
     fun findForUpdate(code: String): StudentLinkCode?
+    fun deleteByChild(childId: ChildId)
 }
 
 interface QrScanLogPort {
     fun record(log: QrScanLog)
     /** 관리자 화면: 최근 실패 시도 */
     fun recentFailures(institutionId: InstitutionId, since: Instant, limit: Int): List<QrScanLog>
+    fun reassignChild(from: ChildId, to: ChildId)
 }

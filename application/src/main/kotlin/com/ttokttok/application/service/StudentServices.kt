@@ -50,6 +50,7 @@ class StudentCreator(
     private val outbox: OutboxPort,
     private val links: AppLinksPort,
     private val clock: ClockPort,
+    private val childLinker: ChildLinker,
 ) {
     data class GuardianSpec(val phone: PhoneNumber, val relation: String?, val isPrimary: Boolean)
     data class Created(val student: Student, val guardians: List<Guardian>)
@@ -84,7 +85,10 @@ class StudentCreator(
                 ),
             )
         }
-        return guardians.save(g)
+        val saved = guardians.save(g)
+        // 이미 가입한 보호자면 아이를 만들거나 붙인다 (스펙 7-8)
+        saved.userId?.let { childLinker.onGuardianLinked(students.find(student.id, student.institutionId) ?: student, it) }
+        return saved
     }
 }
 

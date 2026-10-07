@@ -122,7 +122,7 @@ class CoreLoopIntegrationTest {
             mapOf("name" to "최엄마", "phone" to parentPhone, "password" to "Parent123")).expect(201)
         val parentToken = parent["accessToken"].asText()
         parent["user"]["memberships"][0]["role"].asText() shouldBe "PARENT"
-        call(HttpMethod.GET, "/api/v1/me/children", parentToken, null, null).expect(200)[0]["studentId"].asText() shouldBe studentId
+        call(HttpMethod.GET, "/api/v1/me/children", parentToken, null, null).expect(200)[0]["enrollments"][0]["studentId"].asText() shouldBe studentId
         call(HttpMethod.PUT, "/api/v1/me/devices", parentToken, null, mapOf("flavor" to "PARENT", "platform" to "IOS", "token" to "fcm-$run")).expect(204)
 
         // ── 15:12 등원 (지각 기준 15:10 초과 → 지각) ──

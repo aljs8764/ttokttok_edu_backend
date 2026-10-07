@@ -1,5 +1,6 @@
 package com.ttokttok.domain.student
 
+import com.ttokttok.domain.child.ChildId
 import com.ttokttok.domain.common.ClassroomId
 import com.ttokttok.domain.common.ConflictException
 import com.ttokttok.domain.common.GuardianId
@@ -20,6 +21,8 @@ data class Student(
     val grade: String? = null,
     val status: StudentStatus = StudentStatus.ACTIVE,
     val memo: String? = null,
+    /** 가족의 아이 (스펙 7-8). 보호자 계정이 연결되기 전에는 null */
+    val childId: ChildId? = null,
 ) {
     init {
         if (name.isBlank()) throw InvalidInputException("INVALID_NAME", "원생 이름은 필수입니다")
