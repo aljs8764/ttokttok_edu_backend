@@ -3,6 +3,7 @@ package com.ttokttok.application.port.out
 import com.ttokttok.domain.common.ClassroomId
 import com.ttokttok.domain.common.DomainEvent
 import com.ttokttok.domain.common.InstitutionId
+import com.ttokttok.domain.common.UserId
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -59,4 +60,6 @@ interface RealtimePort {
     fun attendanceUpdated(institutionId: InstitutionId, classroomId: ClassroomId, payload: Map<String, Any?>)
     /** 기관 토픽(/topic/inst.{id})으로만 보내는 이벤트 — notice.read 등. 워커처럼 소켓이 없는 곳은 무시 */
     fun institutionEvent(institutionId: InstitutionId, payload: Map<String, Any?>) = Unit
+    /** 특정 사용자의 개인 큐(/user/queue/events)로 보내는 이벤트 — 교사 앱이 본인이 쓴 알림장·행사의 수신·응답 변화를 받는 용도 */
+    fun userEvent(userId: UserId, payload: Map<String, Any?>) = Unit
 }

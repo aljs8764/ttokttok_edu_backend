@@ -3,6 +3,7 @@ package com.ttokttok.adapter.out.realtime
 import com.ttokttok.application.port.out.RealtimePort
 import com.ttokttok.domain.common.ClassroomId
 import com.ttokttok.domain.common.InstitutionId
+import com.ttokttok.domain.common.UserId
 import org.slf4j.LoggerFactory
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Component
@@ -11,7 +12,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 /**
  * STOMP 브로드캐스트. 롤백된 변경이 화면에 뜨지 않도록 커밋 이후(afterCommit)에만 전송한다.
- * 토픽: /topic/inst.{기관ID} (관리자 대시보드), /topic/class.{반ID} (교사 앱 동기화)
+ * 토픽: /topic/inst.{기관ID} (관리자 대시보드), /topic/class.{반ID} (교사 앱 동기화),
+ * /user/queue/events (개인 큐 — 작성자 교사에게 notice.read·notice.sent·event.responded)
  */
 @Component
 class StompRealtimeAdapter(private val template: SimpMessagingTemplate) : RealtimePort {
@@ -26,6 +28,10 @@ class StompRealtimeAdapter(private val template: SimpMessagingTemplate) : Realti
 
     override fun institutionEvent(institutionId: InstitutionId, payload: Map<String, Any?>) {
         afterCommit { template.convertAndSend("/topic/inst.${institutionId.value}", payload) }
+    }
+
+    override fun userEvent(userId: UserId, payload: Map<String, Any?>) {
+        afterCommit { template.convertAndSendToUser(userId.value.toString(), "/queue/events", payload) }
     }
 
     private fun afterCommit(action: () -> Unit) {

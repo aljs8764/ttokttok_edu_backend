@@ -24,6 +24,7 @@ import com.ttokttok.domain.notice.NoticeId
 import com.ttokttok.domain.notice.NoticeKind
 import com.ttokttok.domain.notice.NoticePublished
 import com.ttokttok.domain.messaging.ParentPushRequested
+import com.ttokttok.domain.messaging.TeacherPushRequested
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 import java.time.Instant
@@ -59,6 +60,10 @@ class OutboxPersistenceAdapter(
                 recipientUserIds = event.recipientUserIds.map { it.value }, isResend = event.isResend, occurredAt = event.occurredAt,
             )
             is ParentPushRequested -> TYPE_PARENT_PUSH to ParentPushV1(
+                institutionId = event.institutionId.value, template = event.template, title = event.title, body = event.body,
+                data = event.data, recipientUserIds = event.recipientUserIds.map { it.value }, occurredAt = event.occurredAt,
+            )
+            is TeacherPushRequested -> TYPE_TEACHER_PUSH to ParentPushV1(
                 institutionId = event.institutionId.value, template = event.template, title = event.title, body = event.body,
                 data = event.data, recipientUserIds = event.recipientUserIds.map { it.value }, occurredAt = event.occurredAt,
             )
@@ -108,6 +113,9 @@ class OutboxPersistenceAdapter(
         TYPE_PARENT_PUSH -> json.readValue<ParentPushV1>(payload).let {
             ParentPushRequested(InstitutionId(it.institutionId), it.template, it.title, it.body, it.data, it.recipientUserIds.map(::UserId), it.occurredAt)
         }
+        TYPE_TEACHER_PUSH -> json.readValue<ParentPushV1>(payload).let {
+            TeacherPushRequested(InstitutionId(it.institutionId), it.template, it.title, it.body, it.data, it.recipientUserIds.map(::UserId), it.occurredAt)
+        }
         else -> error("알 수 없는 outbox 이벤트 타입: $type")
     }
 
@@ -132,6 +140,7 @@ class OutboxPersistenceAdapter(
 
     companion object {
         const val TYPE_PARENT_PUSH = "parent.push.v1"
+        const val TYPE_TEACHER_PUSH = "teacher.push.v1"
         const val TYPE_NOTICE_PUBLISHED = "notice.published.v1"
         const val TYPE_GUARDIAN_MESSAGE = "guardian.message.v1"
         const val TYPE_ATTENDANCE_CHANGED = "attendance.changed.v1"

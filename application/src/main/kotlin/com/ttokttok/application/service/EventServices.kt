@@ -40,6 +40,7 @@ import com.ttokttok.domain.event.SchoolEvent
 import com.ttokttok.domain.event.SchoolEventId
 import com.ttokttok.domain.event.SchoolEventStatus
 import com.ttokttok.domain.messaging.ParentPushRequested
+import com.ttokttok.domain.messaging.TeacherPushRequested
 import com.ttokttok.domain.notice.NoticeKind
 import com.ttokttok.domain.student.GuardianLinkStatus
 import org.slf4j.LoggerFactory
@@ -81,6 +82,18 @@ class EventNotifier(
             ),
         )
         return users.size
+    }
+
+    /** 자동 독촉이 나간 뒤 행사 작성자(교사)에게 결과 안내 */
+    fun notifyAuthor(event: SchoolEvent, pendingStudents: Int, now: Instant) {
+        outbox.publish(
+            TeacherPushRequested(
+                event.institutionId, "EVENT_AUTO_REMINDED", "행사 응답 독촉 안내",
+                "${event.title} — 미응답 ${pendingStudents}명에게 독촉을 보냈어요",
+                mapOf("type" to "event", "eventId" to event.id.value.toString(), "kind" to "REMINDER"),
+                listOf(event.authorId), now,
+            ),
+        )
     }
 
     enum class Kind(val template: String) {
@@ -271,6 +284,7 @@ class RemindEventService(
             val pending = pendingStudents(e)
             if (pending.isNotEmpty()) {
                 val users = notifier.notify(e, pending, EventNotifier.Kind.REMINDER, now)
+                notifier.notifyAuthor(e, pending.size, now)
                 log.info("행사 자동 독촉 {} — 미응답 {}명, 보호자 {}명", e.id.value, pending.size, users)
             }
             count++
@@ -318,13 +332,12 @@ class ParentEventService(
         responses.upsert(RsvpResponse(id, studentId, answer, reason?.trim()?.ifEmpty { null }, parent, now))
 
         val tally = RsvpTally.of(targets.findTargetStudents(id), responses.findByEvent(id))
-        realtime.institutionEvent(
-            event.institutionId,
-            mapOf(
-                "type" to "event.responded", "eventId" to id.value.toString(),
-                "attend" to tally.attend, "absent" to tally.absent, "pending" to tally.pending,
-            ),
+        val payload = mapOf(
+            "type" to "event.responded", "eventId" to id.value.toString(),
+            "attend" to tally.attend, "absent" to tally.absent, "pending" to tally.pending,
         )
+        realtime.institutionEvent(event.institutionId, payload)
+        realtime.userEvent(event.authorId, payload)
         return items(listOf(id), mine, now).first()
     }
 

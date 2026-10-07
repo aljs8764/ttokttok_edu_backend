@@ -37,6 +37,7 @@ import com.ttokttok.domain.common.UserId
 import com.ttokttok.domain.messaging.GuardianMessageRequested
 import com.ttokttok.domain.file.FilePurpose
 import com.ttokttok.domain.messaging.MessageTemplate
+import com.ttokttok.domain.messaging.TeacherPushRequested
 import com.ttokttok.domain.notice.Notice
 import com.ttokttok.domain.notice.NoticeId
 import com.ttokttok.domain.notice.NoticeKind
@@ -131,7 +132,8 @@ class NoticePublisher(
     private val links: AppLinksPort,
     private val realtime: RealtimePort,
 ) {
-    fun publish(notice: Notice, now: Instant): Notice {
+    /** [notifyAuthor] = 예약 발송처럼 작성자가 그 순간 화면에 없는 경우 작성자 교사 앱에 푸시 */
+    fun publish(notice: Notice, now: Instant, notifyAuthor: Boolean = false): Notice {
         val institution = institutions.findById(notice.institutionId) ?: throw NotFoundException("기관")
         val targets = audience.expand(notice.institutionId, notice.targets)
         val byStudent = guardians.findByStudents(targets.map { it.id }).filter { it.linkStatus != GuardianLinkStatus.UNLINKED }
@@ -162,10 +164,19 @@ class NoticePublisher(
                     ),
                 )
             }
-        realtime.institutionEvent(
-            notice.institutionId,
-            mapOf("type" to "notice.sent", "noticeId" to notice.id.value.toString(), "targetStudents" to targets.size),
-        )
+        val sentPayload = mapOf("type" to "notice.sent", "noticeId" to notice.id.value.toString(), "targetStudents" to targets.size)
+        realtime.institutionEvent(notice.institutionId, sentPayload)
+        realtime.userEvent(notice.authorId, sentPayload)
+        if (notifyAuthor) {
+            outbox.publish(
+                TeacherPushRequested(
+                    notice.institutionId, "NOTICE_SCHEDULED_SENT", "[${institution.name}] 예약 알림장 발송",
+                    "${notice.title} — ${targets.size}명에게 보냈어요",
+                    mapOf("type" to "notice", "noticeId" to notice.id.value.toString(), "kind" to notice.kind.name),
+                    listOf(notice.authorId), now,
+                ),
+            )
+        }
         return sent
     }
 }
@@ -352,7 +363,7 @@ class PublishDueNoticesService(
         val now = clock.now()
         val due = notices.lockDue(now, limit)
         due.forEach { n ->
-            publisher.publish(n, now)
+            publisher.publish(n, now, notifyAuthor = true)
             log.info("예약 알림장 발송 {} ({})", n.id.value, n.title)
         }
         return due.size
@@ -391,13 +402,12 @@ class ParentNoticeService(
         if (recipients.findForUser(listOf(id), parent).isEmpty()) throw NotFoundException("알림장")
         if (recipients.markRead(id, parent, clock.now())) {
             val stats = NoticeReadSummary.of(recipients.findByNotice(id))
-            realtime.institutionEvent(
-                notice.institutionId,
-                mapOf(
-                    "type" to "notice.read", "noticeId" to id.value.toString(),
-                    "readStudents" to stats.readStudents, "targetStudents" to stats.targetStudents,
-                ),
+            val payload = mapOf(
+                "type" to "notice.read", "noticeId" to id.value.toString(),
+                "readStudents" to stats.readStudents, "targetStudents" to stats.targetStudents,
             )
+            realtime.institutionEvent(notice.institutionId, payload)
+            realtime.userEvent(notice.authorId, payload)
         }
     }
 

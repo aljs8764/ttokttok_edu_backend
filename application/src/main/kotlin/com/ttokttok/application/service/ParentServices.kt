@@ -23,7 +23,9 @@ import com.ttokttok.domain.common.DomainEvent
 import com.ttokttok.domain.messaging.GuardianMessageRequested
 import com.ttokttok.domain.notice.NoticePublished
 import com.ttokttok.domain.messaging.ParentPushRequested
+import com.ttokttok.domain.messaging.TeacherPushRequested
 import com.ttokttok.domain.common.ForbiddenException
+import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.InvalidInputException
 import com.ttokttok.domain.common.StudentId
 import com.ttokttok.domain.common.UserId
@@ -127,6 +129,7 @@ class ProcessOutboxService(
         is GuardianMessageRequested -> sendGuardianMessage(event)
         is NoticePublished -> sendNoticePush(event)
         is ParentPushRequested -> sendParentPush(event)
+        is TeacherPushRequested -> sendTeacherPush(event)
         else -> error("처리기가 없는 이벤트: ${event::class.simpleName}")
     }
 
@@ -191,16 +194,26 @@ class ProcessOutboxService(
     }
 
     /** 범용 학부모 푸시 (행사 RSVP 요청·독촉·취소 등) */
-    private fun sendParentPush(e: ParentPushRequested) {
-        val tokens = devices.findByUsers(e.recipientUserIds, AppFlavor.PARENT).map { it.token }.distinct()
+    private fun sendParentPush(e: ParentPushRequested) =
+        sendPush(AppFlavor.PARENT, "학부모", e.institutionId, e.template, e.title, e.body, e.data, e.recipientUserIds)
+
+    /** 교사 앱 푸시 (예약 알림장 발송 완료·행사 자동 독촉 결과 등 작성자 안내) */
+    private fun sendTeacherPush(e: TeacherPushRequested) =
+        sendPush(AppFlavor.TEACHER, "교사", e.institutionId, e.template, e.title, e.body, e.data, e.recipientUserIds)
+
+    private fun sendPush(
+        flavor: AppFlavor, who: String, institutionId: InstitutionId, template: String,
+        title: String, body: String, data: Map<String, String>, userIds: List<UserId>,
+    ) {
+        val tokens = devices.findByUsers(userIds, flavor).map { it.token }.distinct()
         if (tokens.isEmpty()) {
-            logs.record(e.institutionId, NotificationChannel.PUSH, e.template, 0, NotificationStatus.SKIPPED, "등록된 학부모 기기 없음", clock.now())
+            logs.record(institutionId, NotificationChannel.PUSH, template, 0, NotificationStatus.SKIPPED, "등록된 $who 기기 없음", clock.now())
             return
         }
         var success = 0
         val invalid = mutableListOf<String>()
         tokens.chunked(500).forEach { batch ->
-            val r = push.send(PushMessage(batch, e.title, e.body, e.data))
+            val r = push.send(PushMessage(batch, title, body, data))
             success += r.successCount
             invalid += r.invalidTokens
         }
@@ -210,8 +223,8 @@ class ProcessOutboxService(
             success > 0 -> NotificationStatus.PARTIAL
             else -> NotificationStatus.FAILED
         }
-        logs.record(e.institutionId, NotificationChannel.PUSH, e.template, tokens.size, status, null, clock.now())
-        if (status == NotificationStatus.FAILED && invalid.size < tokens.size) error("푸시 발송 실패: ${e.template}")
+        logs.record(institutionId, NotificationChannel.PUSH, template, tokens.size, status, null, clock.now())
+        if (status == NotificationStatus.FAILED && invalid.size < tokens.size) error("푸시 발송 실패: $template")
     }
 
     /** 알림톡(대행사가 실패 시 SMS 대체발송) — STU-003/004/005 */
