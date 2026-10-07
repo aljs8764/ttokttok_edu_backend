@@ -60,6 +60,7 @@ class EventNotifier(
     private val guardians: GuardianPort,
     private val institutions: InstitutionPort,
     private val outbox: OutboxPort,
+    private val realtime: RealtimePort,
 ) {
     private val fmt = DateTimeFormatter.ofPattern("M/d(E) HH:mm", java.util.Locale.KOREAN).withZone(ZoneId.of("Asia/Seoul"))
 
@@ -81,6 +82,7 @@ class EventNotifier(
                 recipientUserIds = users, occurredAt = now,
             ),
         )
+        realtime.userEvents(users, mapOf("type" to "event.changed", "eventId" to event.id.value.toString(), "kind" to kind.name))
         return users.size
     }
 

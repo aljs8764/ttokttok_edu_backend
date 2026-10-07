@@ -22,6 +22,7 @@ import com.ttokttok.application.port.out.AuditLogPort
 import com.ttokttok.application.port.out.ClockPort
 import com.ttokttok.application.port.out.DestinationPort
 import com.ttokttok.application.port.out.EnrollmentPort
+import com.ttokttok.application.port.out.GuardianPort
 import com.ttokttok.application.port.out.InstitutionPort
 import com.ttokttok.application.port.out.RealtimePort
 import com.ttokttok.application.port.out.StudentPort
@@ -65,6 +66,7 @@ class ChangeAttendanceStatusService(
     private val attendance: AttendancePort,
     private val students: StudentPort,
     private val destinations: DestinationPort,
+    private val guardians: GuardianPort,
     private val audit: AuditLogPort,
     private val realtime: RealtimePort,
     private val clock: ClockPort,
@@ -99,6 +101,7 @@ class ChangeAttendanceStatusService(
         // 수동 정정은 학부모 푸시를 보내지 않는다(오등록 정정 알림이 혼란을 줌). 화면 동기화만.
         val view = toAttendanceView(saved, student.name, saved.nextDestinationId?.let { destinations.find(it, command.institutionId) })
         realtime.attendanceUpdated(command.institutionId, classroom.id, view.toPayload())
+        notifyGuardians(guardians, realtime, saved.studentId, saved.status.name)
         return view
     }
 }

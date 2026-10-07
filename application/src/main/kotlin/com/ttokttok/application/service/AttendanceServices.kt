@@ -10,6 +10,7 @@ import com.ttokttok.application.port.out.ClassroomPort
 import com.ttokttok.application.port.out.ClockPort
 import com.ttokttok.application.port.out.DestinationPort
 import com.ttokttok.application.port.out.EnrollmentPort
+import com.ttokttok.application.port.out.GuardianPort
 import com.ttokttok.application.port.out.InstitutionPort
 import com.ttokttok.application.port.out.OutboxPort
 import com.ttokttok.application.port.out.RealtimePort
@@ -68,6 +69,7 @@ class AttendanceCommandSupport(
     private val enrollments: EnrollmentPort,
     private val institutions: InstitutionPort,
     private val destinations: DestinationPort,
+    private val guardians: GuardianPort,
     private val outbox: OutboxPort,
     private val realtime: RealtimePort,
     private val clock: ClockPort,
@@ -118,6 +120,7 @@ class AttendanceCommandSupport(
         )
         val view = toAttendanceView(saved, ctx.student.name, destination)
         realtime.attendanceUpdated(ctx.institution.id, ctx.classroom.id, view.toPayload())
+        notifyGuardians(guardians, realtime, ctx.student.id, saved.status.name)
         return view
     }
 
@@ -257,3 +260,9 @@ internal fun AttendanceView.toPayload(): Map<String, Any?> = mapOf(
     "checkOutAt" to checkOutAt?.toString(),
     "nextDestinationName" to nextDestinationName,
 )
+
+/** 학부모 앱 개인 큐(/user/queue/events)로 출결 변화 신호 — 앱은 받으면 타임라인을 다시 읽는다 */
+internal fun notifyGuardians(guardians: GuardianPort, realtime: RealtimePort, studentId: StudentId, status: String) {
+    val users = guardians.findByStudent(studentId).mapNotNull { it.userId }.distinct()
+    if (users.isNotEmpty()) realtime.userEvents(users, mapOf("type" to "attendance.changed", "studentId" to studentId.value.toString(), "status" to status))
+}
