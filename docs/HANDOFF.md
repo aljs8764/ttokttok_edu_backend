@@ -47,6 +47,7 @@
 
 ## 관리자 웹 상태 (Next.js, APP 아님) — IA 화면 전부 + 출석 QR 작성 완료
 - 위치: 사용자 PC `C:\workspaces\ttokttok_edu_react` (git main, 원격 저장소 없음). package-lock.json 미커밋
+  - 7cea345 PUSH·RT 교사 알림장·행사 화면이 개인 큐로 실시간 갱신 (브랜치 claude/friendly-hopper-9o77xy, main 병합 전)
   - 3bfdcec 7-8 기관 종류(학원·학교·어린이집) 설정, QR 실패의 미등록 학생 표시
   - e920417 QR-001·002 출석 QR 만들기·재발급·A4 인쇄, 기관 위치(지오펜스), 스캔 실패 목록 — qrcode 패키지 추가로 **npm install 다시 필요**
   - 1eff178 SET-001·002·005, SEC-002 기관 정보·로고·직인, 하원 목적지, 약관·재동의, 감사 로그, 내 계정
@@ -72,7 +73,7 @@
   - QR-001·002 출석 QR (`/qr-codes`, 원장·실장 메뉴): 카드 목록·만들기·이름 변경·재발급(재발급 후 인쇄 창)·삭제·선택 인쇄, 기관 위치 카드(현재 위치로 설정·반경·끄기, 수정은 원장만), 최근 스캔 실패 표
   - 인쇄: `/print/qr?ids=` A4 한 장에 QR 하나, 열리면 자동 window.print()
 - 공통 컴포넌트: TargetPicker, AttachmentField(presign → S3 직접 PUT → complete. 버킷 CORS 필요), TermsGate, QrImage(SVG, 오류 정정 M)
-- 실시간: 원장·실장은 /topic/inst 의 notice.read·notice.sent·event.responded 로 갱신. 교사는 30초 폴링
+- 실시간: 원장·실장은 /topic/inst 의 notice.read·notice.sent·event.responded 로 갱신. 교사는 알림장·행사 화면에서 개인 큐 `/user/queue/events` 구독 (원장·실장이 둘 다 구독하면 중복이라 나눔), 30초 폴링은 2분 안전망으로만 남김 (7cea345, 빌드·연동 미검증)
 - 주의: 알림장별 readStats.rate 는 0~1 비율, 대시보드 noticeReadRate 는 % 값
 - 빌드 검증은 안 함. 사용자 PC에서 실행: `cp .env.example .env.local && npm install && npm run dev`
 - 디자인: Primary #1B2559, Accent #FF6B4A, Surface #F6F7FB. 화면 제목 옆에 IA 메뉴ID 표시
@@ -138,7 +139,7 @@
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
 - 앱: Firebase 프로젝트 연결·실기기 푸시 확인, 교사앱 알림장·행사 실기기 확인(카메라·앨범 권한, S3 업로드는 버킷 CORS·localstack 필요), 오프라인 큐 실기기 확인(비행기 모드로 등·하원 → 복구 후 자동 전송), PDF 첨부 열기 실기기 확인, 네이티브 flavor(학생앱 별도 스토어 앱)
 - 앱 알림장·행사에서 미룬 것: PDF 첨부 업로드, 행사 명단 엑셀
-- 교사용 푸시·실시간은 코드 작성만 (빌드·실기기 미검증): 백엔드 빌드 후 개인 큐 구독(교사 로그인 → `/user/queue/events`)과 FCM 교사 기기 수신 확인 필요. 학부모용 `/user/queue/events` 는 같은 방식으로 추후 (RealtimePort.userEvent 재사용)
+- 교사용 푸시·실시간은 코드 작성만 (빌드·실기기 미검증): 백엔드 빌드 후 개인 큐 구독(관리자 웹 교사 화면은 구독 코드 추가됨, 앱은 TeacherShell; 교사 로그인 → `/user/queue/events`)과 FCM 교사 기기 수신 확인 필요. 학부모용 `/user/queue/events` 는 같은 방식으로 추후 (RealtimePort.userEvent 재사용)
 - 관리자 웹: 실제 백엔드와 연동 점검(응답 필드명·권한). 통계(STAT)는 Phase 2
 - 백엔드
   - ATT-004 교육청 출석부 실제 양식 반영 (Open Issue 5, 원본 양식 확보 대기)
