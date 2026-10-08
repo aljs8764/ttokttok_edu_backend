@@ -2,6 +2,7 @@ package com.ttokttok.adapter.`in`.scheduler
 
 import com.ttokttok.application.port.`in`.CleanupStaleFilesUseCase
 import com.ttokttok.application.port.`in`.DailyAttendanceBatchUseCase
+import com.ttokttok.application.port.`in`.InvoiceReminderUseCase
 import com.ttokttok.application.port.`in`.ProcessOutboxUseCase
 import com.ttokttok.application.port.`in`.PublishDueNoticesUseCase
 import com.ttokttok.application.port.`in`.RemindEventUseCase
@@ -88,5 +89,24 @@ class StaleFileCleanupScheduler(private val cleanup: CleanupStaleFilesUseCase) {
     @SchedulerLock(name = "files.cleanupStale")
     fun run() {
         while (cleanup.cleanup(200) == 200) Unit
+    }
+}
+
+/** 미납 자동 알림 (PAY-003). 매일 09:30 KST, 단계(기한 임박·당일·경과)당 청구서 1회 */
+@Component
+@ConditionalOnProperty(name = ["ttok.scheduler.enabled"], havingValue = "true", matchIfMissing = true)
+class InvoiceReminderScheduler(private val remind: InvoiceReminderUseCase) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    @Scheduled(cron = "0 30 9 * * *", zone = "Asia/Seoul")
+    @SchedulerLock(name = "invoice.remind")
+    fun run() {
+        var total = 0
+        while (true) {
+            val n = remind.remindDue(100)
+            total += n
+            if (n < 100) break
+        }
+        log.info("납부 리마인드 {}건 발송", total)
     }
 }

@@ -6,7 +6,7 @@ import java.time.Instant
 /** SET-004 알림 종류. 학부모에게 가는 알림만 대상 (교직원 알림은 항상 켜짐) */
 enum class NotificationCategory(val label: String) {
     ATTENDANCE("출결(등·하원)"), NOTICE("알림장·공지"), EVENT("행사"), CHAT("메시지(회신·채팅)"),
-    SURVEY("설문"), ALBUM("앨범"), ABSENCE("결석 신청 확인");
+    SURVEY("설문"), ALBUM("앨범"), ABSENCE("결석 신청 확인"), PAYMENT("납부 안내·미납 알림");
 
     companion object {
         /** ParentPushRequested.template → 카테고리. 몰라도 null (끌 수 없는 알림) */
@@ -17,6 +17,7 @@ enum class NotificationCategory(val label: String) {
             template.startsWith("ALBUM") -> ALBUM
             template.startsWith("ABSENCE") -> ABSENCE
             template.startsWith("NOTICE") -> NOTICE
+            template.startsWith("PAYMENT") -> PAYMENT
             else -> null
         }
     }
