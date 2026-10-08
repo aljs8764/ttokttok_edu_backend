@@ -48,6 +48,7 @@
 
 ## 관리자 웹 상태 (Next.js, APP 아님) — IA 화면 전부 + 출석 QR 작성 완료
 - 위치: 사용자 PC `C:\workspaces\ttokttok_edu_react` (git main, 원격 저장소 없음). package-lock.json 미커밋
+  - 64e85d1 ONB-001 시작하기 위자드 (`/onboarding`, 원장): 기관 정보 → 하원 목적지 → 첫 반 → 원생·교직원·QR 안내. 반·목적지가 없으면 대시보드에 배너 (브랜치 claude/friendly-hopper-9o77xy)
   - 7cea345 PUSH·RT 교사 알림장·행사 화면이 개인 큐로 실시간 갱신 (브랜치 claude/friendly-hopper-9o77xy, main 병합 전)
   - 3bfdcec 7-8 기관 종류(학원·학교·어린이집) 설정, QR 실패의 미등록 학생 표시
   - e920417 QR-001·002 출석 QR 만들기·재발급·A4 인쇄, 기관 위치(지오펜스), 스캔 실패 목록 — qrcode 패키지 추가로 **npm install 다시 필요**
