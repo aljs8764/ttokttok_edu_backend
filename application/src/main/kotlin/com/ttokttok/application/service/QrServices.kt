@@ -215,6 +215,7 @@ class StudentAppService(
     private val geofences: GeofencePort,
     private val scanLogs: QrScanLogPort,
     private val support: AttendanceCommandSupport,
+    private val locationConsents: com.ttokttok.application.port.out.LocationConsentPort,
     private val clock: ClockPort,
 ) : StudentAppUseCase {
 
@@ -288,6 +289,10 @@ class StudentAppService(
             ?: fail(device, qr, null, QrScanFailure.NOT_ENROLLED, "${instName ?: "이 기관"}에 재원 중인 원생으로 등록되어 있지 않습니다")
 
         geofences.find(institutionId)?.let { fence ->
+            // PAR-008 보호자가 위치 정보 제공에 동의하지 않았으면 위치 확인을 할 수 없다
+            if (!locationConsents.isGranted(device.childId.value)) {
+                fail(device, qr, student, QrScanFailure.LOCATION_REQUIRED, "보호자가 위치 정보 제공에 동의하지 않아 앱으로 출석할 수 없습니다. 선생님께 문의하세요")
+            }
             val lat = command.latitude
             val lng = command.longitude
             if (lat == null || lng == null) fail(device, qr, student, QrScanFailure.LOCATION_REQUIRED, "위치 권한을 켜고 다시 찍어 주세요")

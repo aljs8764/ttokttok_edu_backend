@@ -11,7 +11,9 @@ import com.ttokttok.application.port.out.DeviceTokenPort
 import com.ttokttok.application.port.out.GuardianPort
 import com.ttokttok.application.port.out.InstitutionPort
 import com.ttokttok.application.port.out.NotificationChannel
+import com.ttokttok.application.port.out.NotificationCategory
 import com.ttokttok.application.port.out.NotificationLogPort
+import com.ttokttok.application.port.out.NotificationSettingPort
 import com.ttokttok.application.port.out.NotificationStatus
 import com.ttokttok.application.port.out.OutboxPort
 import com.ttokttok.application.port.out.PushMessage
@@ -21,6 +23,7 @@ import com.ttokttok.application.port.out.StudentPort
 import com.ttokttok.domain.attendance.AttendanceChanged
 import com.ttokttok.domain.common.DomainEvent
 import com.ttokttok.domain.messaging.GuardianMessageRequested
+import com.ttokttok.domain.messaging.MessageTemplate
 import com.ttokttok.domain.notice.NoticePublished
 import com.ttokttok.domain.messaging.ParentPushRequested
 import com.ttokttok.domain.messaging.TeacherPushRequested
@@ -101,6 +104,7 @@ class ProcessOutboxService(
     private val push: SendPushPort,
     private val alimtalk: SendAlimtalkPort,
     private val logs: NotificationLogPort,
+    private val channelSettings: NotificationSettingPort,
     private val noticeRecipients: com.ttokttok.application.port.out.NoticeRecipientPort,
     private val clock: ClockPort,
 ) : ProcessOutboxUseCase {
@@ -134,6 +138,7 @@ class ProcessOutboxService(
     }
 
     private fun sendAttendancePush(e: AttendanceChanged) {
+        if (skippedByInstitution(e.institutionId, NotificationCategory.ATTENDANCE, NotificationChannel.PUSH, TEMPLATE)) return
         val parentIds = guardians.findByStudent(e.studentId).mapNotNull { it.userId }.distinct()
         val tokens = devices.findByUsers(parentIds, AppFlavor.PARENT).map { it.token }.distinct()
         if (tokens.isEmpty()) {
@@ -163,6 +168,7 @@ class ProcessOutboxService(
     /** 알림장·공지 (NTC-001·006·009). FCM 멀티캐스트는 500개 토큰 단위 */
     private fun sendNoticePush(e: NoticePublished) {
         val template = if (e.isResend) "NOTICE_RESEND" else "NOTICE_PUBLISHED"
+        if (skippedByInstitution(e.institutionId, NotificationCategory.NOTICE, NotificationChannel.PUSH, template)) return
         val tokens = devices.findByUsers(e.recipientUserIds, AppFlavor.PARENT)
         if (tokens.isEmpty()) {
             logs.record(e.institutionId, NotificationChannel.PUSH, template, 0, NotificationStatus.SKIPPED, "등록된 학부모 기기 없음", clock.now())
@@ -194,8 +200,17 @@ class ProcessOutboxService(
     }
 
     /** 범용 학부모 푸시 (행사 RSVP 요청·독촉·취소 등) */
-    private fun sendParentPush(e: ParentPushRequested) =
+    private fun sendParentPush(e: ParentPushRequested) {
+        NotificationCategory.ofTemplate(e.template)?.let { if (skippedByInstitution(e.institutionId, it, NotificationChannel.PUSH, e.template)) return }
         sendPush(AppFlavor.PARENT, "학부모", e.institutionId, e.template, e.title, e.body, e.data, e.recipientUserIds)
+    }
+
+    /** SET-004 기관이 이 알림 종류·채널을 꺼 둔 경우 보내지 않고 로그만 남긴다 */
+    private fun skippedByInstitution(institutionId: InstitutionId, category: NotificationCategory, channel: NotificationChannel, template: String): Boolean {
+        if (channelSettings.enabled(institutionId, category, channel)) return false
+        logs.record(institutionId, channel, template, 0, NotificationStatus.SKIPPED, "기관 알림 설정에서 꺼짐", clock.now())
+        return true
+    }
 
     /** 교사 앱 푸시 (예약 알림장 발송 완료·행사 자동 독촉 결과 등 작성자 안내) */
     private fun sendTeacherPush(e: TeacherPushRequested) =
@@ -229,6 +244,8 @@ class ProcessOutboxService(
 
     /** 알림톡(대행사가 실패 시 SMS 대체발송) — STU-003/004/005 */
     private fun sendGuardianMessage(e: GuardianMessageRequested) {
+        // 알림장 도착 안내만 기관 설정으로 끌 수 있다 (가입·초대 안내는 항상 발송)
+        if (e.template == MessageTemplate.NOTICE_NEW && skippedByInstitution(e.institutionId, NotificationCategory.NOTICE, NotificationChannel.ALIMTALK, e.template.code)) return
         val ok = alimtalk.send(e.phone, e.template.code, e.variables)
         logs.record(
             e.institutionId, NotificationChannel.ALIMTALK, e.template.code, 1,
