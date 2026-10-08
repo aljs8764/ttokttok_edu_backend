@@ -1,4 +1,4 @@
-# 똑똑 백엔드·관리자 웹·앱 — 인계 메모 (2026-10-07)
+# 똑똑 백엔드·관리자 웹·앱 — 인계 메모 (2026-10-08)
 
 > **기준 문서는 백엔드 저장소의 `docs/HANDOFF.md`** (2026-10-07 결정). claude.ai 프로젝트의 `claude/backend/HANDOFF.md` 는 이 날짜 시점의 사본이라 이후 갱신되지 않는다. 진행 상황 갱신은 저장소 쪽에만 한다.
 
@@ -140,12 +140,17 @@
   - 남은 설정: `flutterfire configure` (google-services.json·GoogleService-Info.plist·Gradle 플러그인), Xcode Push Notifications·Background Modes capability, APNs 키 Firebase 업로드, 실기기 수신 확인
 - 학생앱 (`lib/features/student`): 기기 토큰만 복원(로그인 없음) → 미연결이면 `/link` 코드 입력, 홈(오늘 수업·출결, 큰 QR 출석 버튼), `/scan` 카메라 QR + 현재 위치 전송, 목적지 선택 시트, 성공/실패 화면(실패 코드별 안내). 401 이면 토큰 삭제 → 연결 화면
 
+## Phase 2 진행 (2026-10-08~)
+- 범위: IA 엑셀 Phase=2 기능 47건. 슬라이스 순서 — ① 통계·대시보드 위젯 ② 소통(NTC-003/007/010/011, ATT-007, STU-009~011) ③ 일정(CLS-003/004, STF-004, 행사 캘린더·템플릿) ④ 결제·SaaS 백오피스·설정 ⑤ 온보딩/인증 보강, 셔틀 GPS(ATT-009)
+- ① 통계 완료(코드만, 빌드·실행 미검증): 백엔드 9bfaa23 — `/api/v1/stats/{kpi,congestion,classrooms,classrooms/{id}/trend,enrollment,enrollment/trend,report.xlsx}` (원장·실장 전용, 비율은 0~1), `/api/v1/dashboard/widgets/{low-read-notices,congestion}` (직원). 일별 집계는 daily_attendance_stat(오늘 이전)+attendance_day(오늘) 합산. 웹 4bd8a93 — `/stats` 화면(SVG 차트, 외부 차트 라이브러리 없음)·대시보드 DASH-004/006 위젯. 엑셀 리포트(STAT-007)는 시트 3종(기간 KPI·반별 비교·재원 현황) 선택 다운로드 — PDF 는 미구현
+- 이미 구현돼 Phase 2 에서 제외: AUTH-009 다기관(7-8), ATT-008 QR(학생앱), STU-008
+
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
 - 앱: Firebase 프로젝트 연결·실기기 푸시 확인, 교사앱 알림장·행사 실기기 확인(카메라·앨범 권한, S3 업로드는 버킷 CORS·localstack 필요), 오프라인 큐 실기기 확인(비행기 모드로 등·하원 → 복구 후 자동 전송), PDF 첨부 열기 실기기 확인, 네이티브 flavor(학생앱 별도 스토어 앱)
 - 앱 알림장·행사의 PDF 첨부 업로드·행사 명단 엑셀은 완료 (실기기 확인 필요: 파일 선택, 공유 시트)
 - 교사용 푸시·실시간은 코드 작성만 (빌드·실기기 미검증): 백엔드 빌드 후 개인 큐 구독(관리자 웹 교사 화면은 구독 코드 추가됨, 앱은 TeacherShell; 교사 로그인 → `/user/queue/events`)과 FCM 교사 기기 수신 확인 필요. 학부모용 `/user/queue/events`(d27130a·ace65a2)도 코드만 — 학부모 로그인 후 소켓 수신 확인 필요
-- 관리자 웹: 실제 백엔드와 연동 점검(응답 필드명·권한). 2026-10-08 정적 대조로 웹이 부르는 API 66개(메서드+경로)가 백엔드 매핑 109개에 모두 있음을 확인, 대시보드 today 응답 필드 일치 확인 — 나머지 응답 필드·권한은 실제 실행 때 확인. 통계(STAT)는 Phase 2
+- 관리자 웹: 실제 백엔드와 연동 점검(응답 필드명·권한). 2026-10-08 정적 대조로 웹이 부르는 API 66개(메서드+경로)가 백엔드 매핑 109개에 모두 있음을 확인, 대시보드 today 응답 필드 일치 확인 — 나머지 응답 필드·권한은 실제 실행 때 확인. 통계(STAT)는 Phase 2 슬라이스 ①로 추가
 - 백엔드
   - ATT-004 교육청 출석부 실제 양식 반영 (Open Issue 5, 원본 양식 확보 대기)
   - 빌드·테스트 검증, GitHub 푸시 (보류)
