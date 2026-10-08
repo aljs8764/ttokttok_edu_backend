@@ -141,8 +141,9 @@
 - 학생앱 (`lib/features/student`): 기기 토큰만 복원(로그인 없음) → 미연결이면 `/link` 코드 입력, 홈(오늘 수업·출결, 큰 QR 출석 버튼), `/scan` 카메라 QR + 현재 위치 전송, 목적지 선택 시트, 성공/실패 화면(실패 코드별 안내). 401 이면 토큰 삭제 → 연결 화면
 
 ## Phase 2 진행 (2026-10-08~)
-- 범위: IA 엑셀 Phase=2 기능 47건. 슬라이스 순서 — ① 통계·대시보드 위젯 ② 소통(NTC-003/007/010/011, ATT-007, STU-009~011) ③ 일정(CLS-003/004, STF-004, 행사 캘린더·템플릿) ④ 결제·SaaS 백오피스·설정 ⑤ 온보딩/인증 보강, 셔틀 GPS(ATT-009)
-- ① 통계 완료(코드만, 빌드·실행 미검증): 백엔드 9bfaa23 — `/api/v1/stats/{kpi,congestion,classrooms,classrooms/{id}/trend,enrollment,enrollment/trend,report.xlsx}` (원장·실장 전용, 비율은 0~1), `/api/v1/dashboard/widgets/{low-read-notices,congestion}` (직원). 일별 집계는 daily_attendance_stat(오늘 이전)+attendance_day(오늘) 합산. 웹 4bd8a93 — `/stats` 화면(SVG 차트, 외부 차트 라이브러리 없음)·대시보드 DASH-004/006 위젯. 엑셀 리포트(STAT-007)는 시트 3종(기간 KPI·반별 비교·재원 현황) 선택 다운로드 — PDF 는 미구현
+- 계획·진행 문서: https://claude.ai/code/artifact/a14878ce-38a5-4fae-9544-cbdf19aa728d (47건 영역별 범위·슬라이스 순서·진행 표, 기준 문서)
+- 범위: IA 엑셀 Phase=2 기능 47건 (STAT-007 은 Phase 3, 맞춤 리포트는 STAT-008). 슬라이스 순서 — ① 통계·대시보드 위젯 ② 소통(NTC-003/007/010/011, ATT-007, STU-009~011) ③ 일정(CLS-003/004, STF-004, 행사 캘린더·템플릿) ④ 결제·SaaS 백오피스·설정 ⑤ 온보딩/인증 보강, 셔틀 GPS(ATT-009)
+- ① 통계 완료(코드만, 빌드·실행 미검증): 백엔드 9bfaa23 — `/api/v1/stats/{kpi,congestion,classrooms,classrooms/{id}/trend,enrollment,enrollment/trend,report.xlsx}` (원장·실장 전용, 비율은 0~1), `/api/v1/dashboard/widgets/{low-read-notices,congestion}` (직원). 일별 집계는 daily_attendance_stat(오늘 이전)+attendance_day(오늘) 합산. 웹 4bd8a93 — `/stats` 화면(SVG 차트, 외부 차트 라이브러리 없음)·대시보드 DASH-004/006 위젯. 엑셀 리포트(STAT-008)는 시트 3종(기간 KPI·반별 비교·재원 현황) 선택 다운로드 — PDF 는 미구현
 - 이미 구현돼 Phase 2 에서 제외: AUTH-009 다기관(7-8), ATT-008 QR(학생앱), STU-008
 
 ## 남은 일
