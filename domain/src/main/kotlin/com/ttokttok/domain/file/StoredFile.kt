@@ -11,11 +11,13 @@ import java.util.UUID
 @JvmInline value class FileId(val value: UUID) { companion object { fun new() = FileId(Uuid7.next()) } }
 
 /** 업로드 용도 — 용도별로 허용 형식이 다르다 */
-enum class FilePurpose(val allowedMimes: Set<String>) {
+enum class FilePurpose(val allowedMimes: Set<String>, val maxSize: Long = StoredFile.MAX_SIZE) {
     LOGO(setOf("image/jpeg", "image/png")),
     SEAL(setOf("image/jpeg", "image/png")),
     ABSENCE_EVIDENCE(setOf("image/jpeg", "image/png", "image/heic", "application/pdf")),
     NOTICE_ATTACHMENT(setOf("image/jpeg", "image/png", "image/heic", "application/pdf")),
+    /** NTC-011 앨범 사진·영상. 영상은 100MB 까지 */
+    ALBUM_MEDIA(setOf("image/jpeg", "image/png", "image/heic", "video/mp4", "video/quicktime"), 100L * 1024 * 1024),
 }
 
 enum class FileStatus { PENDING, UPLOADED }
@@ -58,7 +60,7 @@ data class StoredFile(
         ): StoredFile {
             val m = mime.lowercase().trim()
             if (m !in purpose.allowedMimes) throw InvalidInputException("INVALID_FILE_TYPE", "허용되지 않는 파일 형식입니다 ($mime)")
-            if (size !in 1..MAX_SIZE) throw InvalidInputException("FILE_TOO_LARGE", "파일은 20MB 이하여야 합니다")
+            if (size !in 1..purpose.maxSize) throw InvalidInputException("FILE_TOO_LARGE", "파일은 ${purpose.maxSize / (1024 * 1024)}MB 이하여야 합니다")
             val name = originalName.trim().ifEmpty { "file" }.take(200)
             val id = FileId.new()
             // 원본 이름은 메타데이터로만 두고, 키에는 안전한 문자만
