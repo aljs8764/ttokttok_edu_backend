@@ -142,8 +142,9 @@
 
 ## Phase 2 진행 (2026-10-08~)
 - 계획·진행 문서: https://claude.ai/code/artifact/a14878ce-38a5-4fae-9544-cbdf19aa728d (47건 영역별 범위·슬라이스 순서·진행 표, 기준 문서)
-- 범위: IA 엑셀 Phase=2 기능 47건 (STAT-007 은 Phase 3, 맞춤 리포트는 STAT-008). 슬라이스 순서 — ① 통계·대시보드 위젯 ② 소통(NTC-003/007/010/011, ATT-007, STU-009~011) ③ 일정(CLS-003/004, STF-004, 행사 캘린더·템플릿) ④ 결제·SaaS 백오피스·설정 ⑤ 온보딩/인증 보강, 셔틀 GPS(ATT-009)
+- 범위: IA 엑셀 Phase=2 기능 47건 (STAT-007 은 Phase 3, 맞춤 리포트는 STAT-008). 슬라이스 순서 — ① 통계·대시보드 위젯 ② 소통(NTC-003/007/008/010/011, ATT-007, SET-004, PAR-008) ③ 일정(CLS-003/004, STF-004, 행사 캘린더·템플릿) ④ 결제·SaaS 백오피스·설정 ⑤ 온보딩/인증 보강, 셔틀 GPS(ATT-009)
 - ① 통계 완료(코드만, 빌드·실행 미검증): 백엔드 9bfaa23 — `/api/v1/stats/{kpi,congestion,classrooms,classrooms/{id}/trend,enrollment,enrollment/trend,report.xlsx}` (원장·실장 전용, 비율은 0~1), `/api/v1/dashboard/widgets/{low-read-notices,congestion}` (직원). 일별 집계는 daily_attendance_stat(오늘 이전)+attendance_day(오늘) 합산. 웹 4bd8a93 — `/stats` 화면(SVG 차트, 외부 차트 라이브러리 없음)·대시보드 DASH-004/006 위젯. 엑셀 리포트(STAT-008)는 시트 3종(기간 KPI·반별 비교·재원 현황) 선택 다운로드 — PDF 는 미구현
+- ② 소통 완료(코드만, 빌드·실행 미검증): 백엔드 71b916b·5a37236·87b2bb1·a7894a0·ef0bf7b (V10~V15) — 대화 `/api/v1/(me/)conversations`(알림장 회신 NTC-007 + 1:1 채팅 NTC-008 한 모델, 실시간 `chat.message`), 결석 신청 `/api/v1/(me/)absence-requests`(ATT-007: 기록·확인만, 출결 기록은 안 바꿈), 템플릿 `/api/v1/notice-templates`, 설문 `/api/v1/surveys`·`/me/surveys`(NTC-010), 앨범 `/api/v1/albums`·`/me/albums`(NTC-011, 파일 purpose ALBUM_MEDIA 영상 100MB), 채널 옵션 `/api/v1/settings/notification-channels`(SET-004), 위치 동의 `/api/v1/me/children/{id}/location-consent`(PAR-008: 행이 없으면 동의, 철회하면 위치 확인 QR 이 LOCATION_REQUIRED). 웹 ce1c707 — `/messages`·`/absence-requests`·`/notice-templates`·`/surveys`(+new,[id])·`/albums`·설정 "알림 채널" 탭, 알림장 작성 템플릿 불러오기·저장, 알림장 상세 "학부모 회신" 링크. 앱 82906ff — 학부모 더보기에서 메시지·결석 신청·설문·앨범·위치 동의 토글, 알림장 상세 "선생님께 회신", 교사앱 탭 5개(메시지·신청 추가), 푸시 type chat/survey/album/absence_request 이동. 미구현: 상담 예약(NTC-008 후반), 웹의 교직원 "새 대화" 시 보호자 선택(원생 기준으로 보호자마다 대화 생성)
 - 이미 구현돼 Phase 2 에서 제외: AUTH-009 다기관(7-8), ATT-008 QR(학생앱), STU-008
 
 ## 남은 일
