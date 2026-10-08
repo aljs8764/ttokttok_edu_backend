@@ -232,7 +232,10 @@ class SubscriptionJdbcAdapter(jdbc: JdbcTemplate) : SubscriptionPort {
     override fun changePlan(institutionId: InstitutionId, planCode: String, status: SubscriptionStatus, nextBillingDate: LocalDate?, now: Instant) {
         named.update(
             """update institution_subscription set plan_code = :c, status = :st, next_billing_date = :nb, trial_ends_on = null,
-                      cancel_at_period_end = false, updated_at = :now where institution_id = :i""",
+                      cancel_at_period_end = false, updated_at = :now,
+                      activated_at = case when cast(:st as varchar) = 'ACTIVE' then coalesce(activated_at, :now) else activated_at end,
+                      canceled_at = case when cast(:st as varchar) = 'CANCELED' then coalesce(canceled_at, :now) else null end
+                where institution_id = :i""",
             p("i" to institutionId.value, "c" to planCode, "st" to status.name, "nb" to nextBillingDate?.let { sqlDate(it) }, "now" to Timestamp.from(now)),
         )
     }
@@ -259,6 +262,23 @@ class SubscriptionJdbcAdapter(jdbc: JdbcTemplate) : SubscriptionPort {
         ) { rs, _ ->
             SubscriptionPaymentView(rs.id("id"), rs.getString("plan_code"), rs.getInt("amount"), rs.getString("status"), rs.date("period_start")!!, rs.date("period_end")!!, rs.ts("paid_at"), rs.getString("failure_reason"))
         }
+
+    override fun setStatus(institutionId: InstitutionId, status: SubscriptionStatus, nextBillingDate: LocalDate?, now: Instant) {
+        named.update(
+            """update institution_subscription set status = :st, next_billing_date = coalesce(:nb, next_billing_date), updated_at = :now,
+                      activated_at = case when cast(:st as varchar) = 'ACTIVE' then coalesce(activated_at, :now) else activated_at end,
+                      canceled_at = case when cast(:st as varchar) = 'CANCELED' then coalesce(canceled_at, :now) else null end
+                where institution_id = :i""",
+            p("i" to institutionId.value, "st" to status.name, "nb" to nextBillingDate?.let { sqlDate(it) }, "now" to Timestamp.from(now)),
+        )
+    }
+
+    override fun cancelDue(today: LocalDate, now: Instant): Int =
+        named.update(
+            """update institution_subscription set status = 'CANCELED', canceled_at = :now, updated_at = :now
+                where status = 'ACTIVE' and cancel_at_period_end and next_billing_date <= :today""",
+            p("today" to sqlDate(today), "now" to Timestamp.from(now)),
+        )
 
     override fun studentCount(institutionId: InstitutionId): Int =
         named.queryForObject("select count(*) from student where institution_id = :i and status <> 'WITHDRAWN'", p("i" to institutionId.value), Int::class.java) ?: 0

@@ -4,6 +4,7 @@ import com.ttokttok.application.port.`in`.CleanupStaleFilesUseCase
 import com.ttokttok.application.port.`in`.DailyAttendanceBatchUseCase
 import com.ttokttok.application.port.`in`.InvoiceReminderUseCase
 import com.ttokttok.application.port.`in`.ProcessOutboxUseCase
+import com.ttokttok.application.port.`in`.PlatformBillingUseCase
 import com.ttokttok.application.port.`in`.PublishDueNoticesUseCase
 import com.ttokttok.application.port.`in`.RemindEventUseCase
 import com.ttokttok.application.port.out.ClockPort
@@ -108,5 +109,18 @@ class InvoiceReminderScheduler(private val remind: InvoiceReminderUseCase) {
             if (n < 100) break
         }
         log.info("납부 리마인드 {}건 발송", total)
+    }
+}
+
+/** 기간 종료 시 해지로 예약된 구독을 다음 결제일이 지나면 해지 처리 (SAAS-002). 매일 00:10 KST */
+@Component
+@ConditionalOnProperty(name = ["ttok.scheduler.enabled"], havingValue = "true", matchIfMissing = true)
+class SubscriptionCancelScheduler(private val billing: PlatformBillingUseCase, private val clock: ClockPort) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    @Scheduled(cron = "0 10 0 * * *", zone = "Asia/Seoul")
+    @SchedulerLock(name = "subscription.cancelDue")
+    fun run() {
+        log.info("구독 해지 처리 {}건", billing.processCancellations(clock.today()))
     }
 }

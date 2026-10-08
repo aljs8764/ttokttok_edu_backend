@@ -1,6 +1,8 @@
 package com.ttokttok.application.service
 
+import com.ttokttok.application.port.`in`.ServiceStatus
 import com.ttokttok.application.port.out.ClassroomPort
+import com.ttokttok.application.port.out.InstitutionServicePort
 import com.ttokttok.application.port.out.MembershipPort
 import com.ttokttok.domain.classroom.Classroom
 import com.ttokttok.domain.common.ClassroomId
@@ -20,9 +22,16 @@ import org.springframework.stereotype.Component
 class AccessGuard(
     private val memberships: MembershipPort,
     private val classrooms: ClassroomPort,
+    private val service: InstitutionServicePort,
 ) {
     fun require(actor: UserId, institutionId: InstitutionId, vararg allowed: Role): Membership {
         val m = memberships.find(actor, institutionId) ?: throw ForbiddenException("이 기관의 구성원이 아닙니다")
+        // SAAS-001: 정지·승인 대기 기관은 업무 API 를 쓸 수 없다 (운영사 문의는 가능하도록 지원 API 는 이 검사를 거치지 않는다)
+        when (service.status(institutionId)) {
+            ServiceStatus.ACTIVE -> Unit
+            ServiceStatus.SUSPENDED -> throw ForbiddenException("서비스 이용이 정지된 기관입니다. 운영팀에 문의해 주세요")
+            ServiceStatus.PENDING -> throw ForbiddenException("가입 승인 대기 중인 기관입니다")
+        }
         if (allowed.isNotEmpty() && m.role !in allowed) throw ForbiddenException("${m.role} 권한으로는 할 수 없는 작업입니다")
         return m
     }

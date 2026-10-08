@@ -69,6 +69,10 @@ interface SubscriptionPort {
     fun setCard(institutionId: InstitutionId, brand: String, last4: String, now: Instant)
     fun setCancelAtPeriodEnd(institutionId: InstitutionId, cancel: Boolean, now: Instant)
     fun payments(institutionId: InstitutionId, limit: Int): List<SubscriptionPaymentView>
+    /** 운영사: 상태·다음 결제일만 바꿈 (ACTIVE 전환 시 activated_at, CANCELED 시 canceled_at 기록) */
+    fun setStatus(institutionId: InstitutionId, status: SubscriptionStatus, nextBillingDate: LocalDate?, now: Instant)
+    /** 기간 종료 시 해지를 걸어 둔 ACTIVE 구독 중 다음 결제일이 지난 건을 CANCELED 로. 처리 건수 */
+    fun cancelDue(today: LocalDate, now: Instant): Int
     /** 탈퇴가 아닌 원생 수 */
     fun studentCount(institutionId: InstitutionId): Int
 }
