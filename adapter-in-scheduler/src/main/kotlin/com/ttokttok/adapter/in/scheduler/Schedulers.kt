@@ -6,6 +6,7 @@ import com.ttokttok.application.port.`in`.InvoiceReminderUseCase
 import com.ttokttok.application.port.`in`.ProcessOutboxUseCase
 import com.ttokttok.application.port.`in`.PlatformBillingUseCase
 import com.ttokttok.application.port.`in`.PublishDueNoticesUseCase
+import com.ttokttok.application.port.`in`.ShuttleTripUseCase
 import com.ttokttok.application.port.`in`.RemindEventUseCase
 import com.ttokttok.application.port.out.ClockPort
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock
@@ -122,5 +123,25 @@ class SubscriptionCancelScheduler(private val billing: PlatformBillingUseCase, p
     @SchedulerLock(name = "subscription.cancelDue")
     fun run() {
         log.info("구독 해지 처리 {}건", billing.processCancellations(clock.today()))
+    }
+}
+
+/** 셔틀 운행 정리 (ATT-009): 3시간 넘게 위치가 없는 운행 자동 종료(10분마다), 30일 지난 좌표 삭제(매일 04:10 KST) */
+@Component
+@ConditionalOnProperty(name = ["ttok.scheduler.enabled"], havingValue = "true", matchIfMissing = true)
+class ShuttleHousekeepingScheduler(private val trips: ShuttleTripUseCase, private val clock: ClockPort) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    @Scheduled(cron = "0 */10 * * * *", zone = "Asia/Seoul")
+    @SchedulerLock(name = "shuttle.closeAbandoned")
+    fun closeAbandoned() {
+        val n = trips.closeAbandoned(clock.now())
+        if (n > 0) log.info("응답 없는 셔틀 운행 {}건 자동 종료", n)
+    }
+
+    @Scheduled(cron = "0 10 4 * * *", zone = "Asia/Seoul")
+    @SchedulerLock(name = "shuttle.purgePositions")
+    fun purge() {
+        log.info("셔틀 좌표 {}건 삭제(30일 경과)", trips.purgePositions(clock.now().minus(java.time.Duration.ofDays(30))))
     }
 }

@@ -18,6 +18,7 @@ enum class NotificationCategory(val label: String) {
             template.startsWith("ABSENCE") -> ABSENCE
             template.startsWith("NOTICE") -> NOTICE
             template.startsWith("PAYMENT") -> PAYMENT
+            template.startsWith("SHUTTLE") -> ATTENDANCE
             else -> null
         }
     }
