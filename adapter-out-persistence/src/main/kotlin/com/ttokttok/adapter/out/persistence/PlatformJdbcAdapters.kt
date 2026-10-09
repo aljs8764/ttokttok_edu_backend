@@ -361,38 +361,39 @@ class PlatformNoticeJdbcAdapter(jdbc: JdbcTemplate) : PlatformNoticePort {
 
 // ───────── SAAS-007 지표 ─────────
 @Component
+// ONB-003: 샘플(체험) 기관은 지표에서 뺀다
 class PlatformMetricsJdbcAdapter(jdbc: JdbcTemplate) : PlatformMetricsPort {
     private val named = NamedParameterJdbcTemplate(jdbc)
 
     override fun monthStats(start: Instant, end: Instant): MonthStats {
         val prm = pp("start" to pts(start), "end" to pts(end))
-        val newPaid = named.queryForObject("select count(*) from institution_subscription where activated_at >= :start and activated_at < :end", prm, Int::class.java) ?: 0
-        val churned = named.queryForObject("select count(*) from institution_subscription where activated_at is not null and canceled_at >= :start and canceled_at < :end", prm, Int::class.java) ?: 0
+        val newPaid = named.queryForObject("select count(*) from institution_subscription where institution_id not in (select id from institution where is_sample) and activated_at >= :start and activated_at < :end", prm, Int::class.java) ?: 0
+        val churned = named.queryForObject("select count(*) from institution_subscription where institution_id not in (select id from institution where is_sample) and activated_at is not null and canceled_at >= :start and canceled_at < :end", prm, Int::class.java) ?: 0
         val activeAtStart = named.queryForObject(
-            "select count(*) from institution_subscription where activated_at < :start and (canceled_at is null or canceled_at >= :start)", prm, Int::class.java,
+            "select count(*) from institution_subscription where institution_id not in (select id from institution where is_sample) and activated_at < :start and (canceled_at is null or canceled_at >= :start)", prm, Int::class.java,
         ) ?: 0
         val activeAtEnd = named.queryForObject(
-            "select count(*) from institution_subscription where activated_at < :end and (canceled_at is null or canceled_at >= :end)", prm, Int::class.java,
+            "select count(*) from institution_subscription where institution_id not in (select id from institution where is_sample) and activated_at < :end and (canceled_at is null or canceled_at >= :end)", prm, Int::class.java,
         ) ?: 0
         // 과거 요금 이력이 없어 현재 플랜 가격으로 근사한다
         val mrr = named.queryForObject(
             """select coalesce(sum(pl.monthly_price), 0) from institution_subscription s join subscription_plan pl on pl.code = s.plan_code
-                where s.activated_at < :end and (s.canceled_at is null or s.canceled_at >= :end)""",
+                where s.institution_id not in (select id from institution where is_sample) and s.activated_at < :end and (s.canceled_at is null or s.canceled_at >= :end)""",
             prm, Long::class.java,
         ) ?: 0L
         return MonthStats(newPaid, churned, activeAtStart, activeAtEnd, mrr)
     }
 
     override fun currentCounts(): Pair<Int, Int> {
-        val paying = named.queryForObject("select count(*) from institution_subscription where status in ('ACTIVE', 'PAST_DUE')", MapSqlParameterSource(), Int::class.java) ?: 0
-        val trial = named.queryForObject("select count(*) from institution_subscription where status = 'TRIAL'", MapSqlParameterSource(), Int::class.java) ?: 0
+        val paying = named.queryForObject("select count(*) from institution_subscription where institution_id not in (select id from institution where is_sample) and status in ('ACTIVE', 'PAST_DUE')", MapSqlParameterSource(), Int::class.java) ?: 0
+        val trial = named.queryForObject("select count(*) from institution_subscription where institution_id not in (select id from institution where is_sample) and status = 'TRIAL'", MapSqlParameterSource(), Int::class.java) ?: 0
         return paying to trial
     }
 
     override fun currentMrr(): Long =
         named.queryForObject(
             """select coalesce(sum(pl.monthly_price), 0) from institution_subscription s join subscription_plan pl on pl.code = s.plan_code
-                where s.status in ('ACTIVE', 'PAST_DUE')""",
+                where s.institution_id not in (select id from institution where is_sample) and s.status in ('ACTIVE', 'PAST_DUE')""",
             MapSqlParameterSource(), Long::class.java,
         ) ?: 0L
 

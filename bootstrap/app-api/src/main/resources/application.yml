@@ -61,3 +61,10 @@ ttok:
       credentials-path: ${FCM_CREDENTIALS_PATH:}
   scheduler:
     enabled: false   # 배치·Outbox는 app-worker에서만
+  # AUTH-006 소셜 로그인 — 카카오·네이버 개발자센터에 앱 등록 후 켠다
+  social:
+    kakao:
+      enabled: ${KAKAO_LOGIN_ENABLED:false}
+      app-id: ${KAKAO_APP_ID:}   # 숫자 앱 ID. 넣으면 다른 앱에서 발급된 토큰을 거절한다
+    naver:
+      enabled: ${NAVER_LOGIN_ENABLED:false}
