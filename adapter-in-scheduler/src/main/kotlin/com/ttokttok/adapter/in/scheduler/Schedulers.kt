@@ -8,6 +8,7 @@ import com.ttokttok.application.port.`in`.ProcessOutboxUseCase
 import com.ttokttok.application.port.`in`.PlatformBillingUseCase
 import com.ttokttok.application.port.`in`.PublishDueNoticesUseCase
 import com.ttokttok.application.port.`in`.ShuttleTripUseCase
+import com.ttokttok.application.port.`in`.UsageAnomalyUseCase
 import com.ttokttok.application.port.`in`.RemindEventUseCase
 import com.ttokttok.application.port.out.ClockPort
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock
@@ -155,5 +156,22 @@ class MissingAlertScheduler(private val missing: MissingAlertUseCase, private va
     @SchedulerLock(name = "attendance.missingAlert", lockAtMostFor = "PT4M")
     fun scan() {
         missing.scan(clock.now())
+    }
+}
+
+/** SAAS-006 사용량 이상 탐지: 매시 5분에 지난 1시간 판정, 매일 04:20 90일 지난 사용량 삭제 */
+@Component
+@ConditionalOnProperty(name = ["ttok.scheduler.enabled"], havingValue = "true", matchIfMissing = true)
+class UsageAnomalyScheduler(private val anomaly: UsageAnomalyUseCase, private val clock: ClockPort) {
+    @Scheduled(cron = "0 5 * * * *", zone = "Asia/Seoul")
+    @SchedulerLock(name = "usage.detect")
+    fun detect() {
+        anomaly.detect(clock.now())
+    }
+
+    @Scheduled(cron = "0 20 4 * * *", zone = "Asia/Seoul")
+    @SchedulerLock(name = "usage.purge")
+    fun purge() {
+        anomaly.purge(clock.now())
     }
 }
