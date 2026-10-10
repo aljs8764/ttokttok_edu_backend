@@ -161,6 +161,10 @@
   - STAT-007·STF-005: `GET /stats/notice-ranking`, `/stats/staff-work` (원장·실장, 최대 1년). (알림장×원생) 단위 열람률, 기관 평균 −10%p·대상 5명 이상이면 취약. 교사별 발송·답장·평균 응답(학부모 메시지 → 첫 교직원 답장)·출결 처리·등원 처리 시점·상담 완료. 웹 통계 > 소통·업무 탭
   - CLS-005: `classroom_textbook`·`classroom_progress`, `/classes/{id}/textbooks|progress`, `/textbooks/{id}`, `/progress/{id}`, `POST /curriculum/quote`. 웹 반 카드 > 교재·진도, 알림장 작성 '진도 불러오기'
   - EVT-009: `album.event_id`, `event_review`. 교직원 `/events/{id}/albums|reviews`, `POST /event-reviews/{id}/hidden`; 학부모 `/me/events/{id}/albums|reviews`, `PUT/DELETE /me/events/{id}/review`(행사 시작 후, 대상 자녀 보호자, 1인 1건). 앱 행사 시트 하단
+- P3-② 수납 고도화·데이터 내보내기 (백엔드 7c584cd, 웹 2d8ff4f): V23.
+  - PAY-006: `discount_rule`(SIBLING n째부터 / LONG_TERM n개월 / MULTI_CLASS n개 반, PERCENT·AMOUNT, 최대 20개), `/discount-rules` CRUD, `POST /invoices/discount-preview`, `POST /invoices/with-discounts`(기존 발행을 그대로 부르고 invoice.base_amount·discount_amount·discount_note·period_start/end 기록). 형제 = 같은 기관에서 보호자 phone_hash 공유, 먼저 등록한 순. 퍼센트는 10원 버림, 합계는 청구액 이하. 웹 청구 다이얼로그는 이 엔드포인트로 바뀜(기존 `POST /invoices` 그대로 있음)
+  - PAY-007: `POST /invoices/{id}/refund-calc`(LAW 학원법 1/3·1/2 기준을 달력 일수로, 1개월 넘는 기간은 월 단위로 나눠 이후 달 전액 / DAILY 일할), `POST /invoices/{id}/refund`(청구서당 1건, 금액 수정 가능, withdrawReason 주면 기존 ChangeStudentStatusUseCase 로 퇴원 처리), `GET /refunds?month`. 송금은 직접
+  - SET-006: `GET /institution/export.zip?from&to`(원장, 출결·알림장 최대 1년) 시트 9개 xlsx + README, 생년월일·보호자 전화 복호화 포함, 감사 로그 `DATA_EXPORT`. 웹 설정 > 데이터 내보내기
 
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
