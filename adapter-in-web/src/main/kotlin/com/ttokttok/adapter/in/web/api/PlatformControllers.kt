@@ -99,6 +99,14 @@ private fun parseYm(month: String?, clock: ClockPort): YearMonth =
 private fun <T : Enum<T>> parseEnum(value: String?, parse: (String) -> T, code: String): T? =
     value?.takeIf { it.isNotBlank() }?.let { try { parse(it) } catch (e: IllegalArgumentException) { throw InvalidInputException(code, "허용되지 않는 값입니다: $it") } }
 
+// ───────── SAAS-001 내 기관 서비스 상태 (정지·승인 대기여도 조회 가능) ─────────
+@RestController
+class InstitutionServiceStatusController(private val status: com.ttokttok.application.port.`in`.InstitutionServiceStatusQuery) {
+    @GetMapping("/api/v1/institution/service-status")
+    fun get(@AuthenticationPrincipal jwt: Jwt, @RequestHeader(INSTITUTION_HEADER) institutionId: UUID) =
+        status.status(jwt.userId(), inst(institutionId)).let { mapOf("status" to it.status.name, "reason" to it.reason, "approvalRequired" to it.approvalRequired) }
+}
+
 // ───────── 운영사 여부 (웹이 콘솔 메뉴를 보일지 판단) ─────────
 @RestController
 class PlatformMeController(private val access: PlatformAccessQuery) {

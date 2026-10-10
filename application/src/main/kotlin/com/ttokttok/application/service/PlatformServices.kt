@@ -41,6 +41,7 @@ import com.ttokttok.domain.common.InvalidInputException
 import com.ttokttok.domain.common.NotFoundException
 import com.ttokttok.domain.common.UserId
 import com.ttokttok.domain.messaging.TeacherPushRequested
+import com.ttokttok.domain.user.Role
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -282,7 +283,7 @@ class InstitutionSupportService(
 
     @Transactional
     override fun open(actor: UserId, institutionId: InstitutionId, subject: String, category: TicketCategory, body: String): TicketView {
-        accessGuard.requireManager(actor, institutionId)
+        accessGuard.requireMemberAnyStatus(actor, institutionId, Role.OWNER, Role.ADMIN)
         val s = checkText("제목", subject, 100)
         val b = checkText("내용", body, 4000)
         val now = clock.now()
@@ -293,19 +294,19 @@ class InstitutionSupportService(
 
     @Transactional(readOnly = true)
     override fun list(actor: UserId, institutionId: InstitutionId): List<TicketView> {
-        accessGuard.requireManager(actor, institutionId)
+        accessGuard.requireMemberAnyStatus(actor, institutionId, Role.OWNER, Role.ADMIN)
         return tickets.list(institutionId.value, null)
     }
 
     @Transactional(readOnly = true)
     override fun get(actor: UserId, institutionId: InstitutionId, id: UUID): TicketView {
-        accessGuard.requireManager(actor, institutionId)
+        accessGuard.requireMemberAnyStatus(actor, institutionId, Role.OWNER, Role.ADMIN)
         return owned(id, institutionId).let { full(id) }
     }
 
     @Transactional
     override fun reply(actor: UserId, institutionId: InstitutionId, id: UUID, body: String): TicketView {
-        accessGuard.requireManager(actor, institutionId)
+        accessGuard.requireMemberAnyStatus(actor, institutionId, Role.OWNER, Role.ADMIN)
         val t = owned(id, institutionId)
         if (t.status == TicketStatus.CLOSED) throw ConflictException("TICKET_CLOSED", "종료된 문의입니다. 새 문의를 등록해 주세요")
         val now = clock.now()

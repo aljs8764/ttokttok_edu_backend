@@ -59,6 +59,7 @@ class SignUpInstitutionService(
     private val memberships: MembershipPort,
     private val hasher: PasswordHasherPort,
     private val assembler: AuthenticatedUserAssembler,
+    private val approval: SignupApprovalPolicy,
 ) : SignUpInstitutionUseCase {
     @Transactional
     override fun signUp(command: SignUpInstitutionUseCase.Command): AuthenticatedUser {
@@ -69,6 +70,7 @@ class SignUpInstitutionService(
         val institution = institutions.save(Institution(InstitutionId.new(), command.institutionName.trim(), command.ownerName.trim(), type = command.type))
         val owner = users.save(User(UserId.new(), command.ownerName.trim(), email, null, hasher.hash(command.password)))
         memberships.save(Membership(MembershipId.new(), owner.id, institution.id, Role.OWNER, "원장"))
+        approval.onSignedUp(institution.id)   // SAAS-001: 승인제를 켜면 '승인 대기'
         return assembler.assemble(owner)
     }
 }

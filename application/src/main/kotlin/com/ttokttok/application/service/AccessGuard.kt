@@ -36,6 +36,13 @@ class AccessGuard(
         return m
     }
 
+    /** 정지·승인 대기 기관이어도 통과 — 운영사 문의(SAAS-004)·서비스 상태 확인에만 쓴다 */
+    fun requireMemberAnyStatus(actor: UserId, institutionId: InstitutionId, vararg allowed: Role): Membership {
+        val m = memberships.find(actor, institutionId) ?: throw ForbiddenException("이 기관의 구성원이 아닙니다")
+        if (allowed.isNotEmpty() && m.role !in allowed) throw ForbiddenException("${m.role} 권한으로는 할 수 없는 작업입니다")
+        return m
+    }
+
     fun requireStaff(actor: UserId, institutionId: InstitutionId): Membership =
         require(actor, institutionId, Role.OWNER, Role.ADMIN, Role.TEACHER)
 
