@@ -3,6 +3,7 @@ package com.ttokttok.adapter.`in`.scheduler
 import com.ttokttok.application.port.`in`.CleanupStaleFilesUseCase
 import com.ttokttok.application.port.`in`.DailyAttendanceBatchUseCase
 import com.ttokttok.application.port.`in`.InvoiceReminderUseCase
+import com.ttokttok.application.port.`in`.MissingAlertUseCase
 import com.ttokttok.application.port.`in`.ProcessOutboxUseCase
 import com.ttokttok.application.port.`in`.PlatformBillingUseCase
 import com.ttokttok.application.port.`in`.PublishDueNoticesUseCase
@@ -143,5 +144,16 @@ class ShuttleHousekeepingScheduler(private val trips: ShuttleTripUseCase, privat
     @SchedulerLock(name = "shuttle.purgePositions")
     fun purge() {
         log.info("셔틀 좌표 {}건 삭제(30일 경과)", trips.purgePositions(clock.now().minus(java.time.Duration.ofDays(30))))
+    }
+}
+
+/** ATT-010 미등원 초과 경고: 5분마다 (수업 시작 + 기관 기준 분) 을 넘긴 미등원 원생을 찾아 알린다 */
+@Component
+@ConditionalOnProperty(name = ["ttok.scheduler.enabled"], havingValue = "true", matchIfMissing = true)
+class MissingAlertScheduler(private val missing: MissingAlertUseCase, private val clock: ClockPort) {
+    @Scheduled(cron = "30 */5 * * * *", zone = "Asia/Seoul")
+    @SchedulerLock(name = "attendance.missingAlert", lockAtMostFor = "PT4M")
+    fun scan() {
+        missing.scan(clock.now())
     }
 }
