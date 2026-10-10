@@ -165,6 +165,9 @@
   - PAY-006: `discount_rule`(SIBLING n째부터 / LONG_TERM n개월 / MULTI_CLASS n개 반, PERCENT·AMOUNT, 최대 20개), `/discount-rules` CRUD, `POST /invoices/discount-preview`, `POST /invoices/with-discounts`(기존 발행을 그대로 부르고 invoice.base_amount·discount_amount·discount_note·period_start/end 기록). 형제 = 같은 기관에서 보호자 phone_hash 공유, 먼저 등록한 순. 퍼센트는 10원 버림, 합계는 청구액 이하. 웹 청구 다이얼로그는 이 엔드포인트로 바뀜(기존 `POST /invoices` 그대로 있음)
   - PAY-007: `POST /invoices/{id}/refund-calc`(LAW 학원법 1/3·1/2 기준을 달력 일수로, 1개월 넘는 기간은 월 단위로 나눠 이후 달 전액 / DAILY 일할), `POST /invoices/{id}/refund`(청구서당 1건, 금액 수정 가능, withdrawReason 주면 기존 ChangeStudentStatusUseCase 로 퇴원 처리), `GET /refunds?month`. 송금은 직접
   - SET-006: `GET /institution/export.zip?from&to`(원장, 출결·알림장 최대 1년) 시트 9개 xlsx + README, 생년월일·보호자 전화 복호화 포함, 감사 로그 `DATA_EXPORT`. 웹 설정 > 데이터 내보내기
+- P3-③ 플랫폼 (백엔드 e82d7d4, 웹 a3e526b, 앱 f05569e): V24.
+  - SAAS-006: `UsageMeteringFilter`(보안 필터 앞, `/api/v1/**` 중 `X-Institution-Id` 있는 요청을 기관×시간으로 요청·5xx·401/403·429·사용자 수, 로그인 성공·실패는 플랫폼 행 00000000-…) → 1분마다 `api_usage_hourly` upsert. `UsageAnomalyScheduler` 매시 5분(ShedLock `usage.detect`): 직전 7일 같은 시각 평균 대비 5배·300건 이상 급증, 오류율 10%(50건 이상), 401·403 100건, 429 20건, 로그인 실패 100회, 매일 9시 판정분에 3일 무사용 → `usage_alert`(기관·종류·시각 유일). 90일 지난 사용량 04:20 삭제. API `/platform/usage?days`, `/platform/usage/hourly`, `/platform/usage-alerts`(+`/{id}/ack`). 웹 운영 콘솔 > 사용량·이상 탐지. 학부모 `/me` 요청은 기관 헤더가 없어 기관별 집계에서 빠짐. 필터가 `UsageMeteringUseCase` 를 받으므로 `@WebMvcTest` 슬라이스 테스트는 MockBean 추가 필요
+  - SET-007(부분): `app_user.locale`(ko·en), `GET/PUT /me/locale`. 웹 `lib/i18n.tsx`(한국어 문구 키 사전, localStorage + 계정 동기화, 날짜 선택기 로케일) — 사이드·계정 메뉴, 화면 제목, 설정 탭, 로그인 화면만 영어. 앱 `core/i18n/i18n.dart` — 하단 탭·더보기만. 나머지 화면 문구와 서버 오류 메시지(한국어 하드코딩)는 화면별로 사전에 더해 나가야 함
 
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
