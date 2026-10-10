@@ -154,6 +154,14 @@
 - Phase 3 계획(2026-10-10): https://claude.ai/code/artifact/57aabf5e-4ba8-4bbc-9470-9bb0f1c415a4 — IA Phase3 22건. 선행 0(Phase 2 빌드 검증) → P3-① 안전·운영(ATT-010 미등원 초과 경고, STAT-007, STF-005, CLS-005, EVT-009) → P3-② 수납·내보내기(PAY-006, PAY-007, SET-006) → P3-③ 플랫폼(SAAS-006, SET-007) → P3-④ 광고·커머스 8건(광고 규제 검토 후) → P3-⑤ PG·발행대행·번역 API 연동 4건(계약 후)
 - 이미 구현돼 Phase 2 에서 제외: AUTH-009 다기관(7-8), ATT-008 QR(학생앱), STU-008
 
+## Phase 3 진행 (2026-10-10~)
+
+- P3-① 안전·운영 고도화 (백엔드 3c83498, 웹 89805ed, 앱 e35ba7c): V22.
+  - ATT-010 미등원 초과 경고: `MissingAlertScheduler` 5분(ShedLock `attendance.missingAlert`). 수업 시작 + 기관 기준 분(기본 30, 0=끔, 10~180) 지난 SCHEDULED 출결 → 원장·실장·담당 교사(+옵션 보호자) 푸시 1회(`attendance_missing_alert`). 결석 신청 제외, 지각 신청은 예상 시각 기준, 다기관 아이는 같은 날 다른 기관 하원 기록을 문구에 포함. 최근 2시간 창만 봐서 재시작 직후 몰아 보내지 않음. API `GET/PUT /institution/missing-alert`, `GET /attendance-missing-alerts?date`. 웹 설정 탭·대시보드 위젯, 앱 푸시 type `attendance_missing`
+  - STAT-007·STF-005: `GET /stats/notice-ranking`, `/stats/staff-work` (원장·실장, 최대 1년). (알림장×원생) 단위 열람률, 기관 평균 −10%p·대상 5명 이상이면 취약. 교사별 발송·답장·평균 응답(학부모 메시지 → 첫 교직원 답장)·출결 처리·등원 처리 시점·상담 완료. 웹 통계 > 소통·업무 탭
+  - CLS-005: `classroom_textbook`·`classroom_progress`, `/classes/{id}/textbooks|progress`, `/textbooks/{id}`, `/progress/{id}`, `POST /curriculum/quote`. 웹 반 카드 > 교재·진도, 알림장 작성 '진도 불러오기'
+  - EVT-009: `album.event_id`, `event_review`. 교직원 `/events/{id}/albums|reviews`, `POST /event-reviews/{id}/hidden`; 학부모 `/me/events/{id}/albums|reviews`, `PUT/DELETE /me/events/{id}/review`(행사 시작 후, 대상 자녀 보호자, 1인 1건). 앱 행사 시트 하단
+
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
 - 앱: Firebase 프로젝트 연결·실기기 푸시 확인, 교사앱 알림장·행사 실기기 확인(카메라·앨범 권한, S3 업로드는 버킷 CORS·localstack 필요), 오프라인 큐 실기기 확인(비행기 모드로 등·하원 → 복구 후 자동 전송), PDF 첨부 열기 실기기 확인, 네이티브 flavor(학생앱 별도 스토어 앱)
