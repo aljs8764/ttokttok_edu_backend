@@ -45,6 +45,7 @@ object ErrorMessagesEn {
         "이동할 반" to "Target class", "업로드 작업" to "Upload job", "아이" to "Child", "셔틀 운행" to "Shuttle trip",
         "상담 예약" to "Consultation booking", "보호자" to "Guardian", "기기" to "Device", "교재" to "Textbook", "계정" to "Account",
         "경고" to "Alert", "이 기관" to "this institution", "교직원" to "Staff member",
+        "게시판" to "Board", "게시글" to "Post", "댓글" to "Comment",
         // 라벨
         "내용" to "Content", "제목" to "Title", "결석" to "Absence", "지각" to "Late arrival", "조퇴" to "Early leave",
         "수정" to "edited", "취소" to "canceled", "발송" to "sent", "카카오" to "Kakao", "네이버" to "Naver",
@@ -53,6 +54,22 @@ object ErrorMessagesEn {
     )
 
     private val EXACT: Map<String, String> = mapOf(
+        // 커뮤니티 (COM-001~009)
+        "이 게시판을 이용할 수 없습니다" to "You can't use this board.",
+        "커뮤니티 이용 규칙에 먼저 동의해 주세요" to "Please agree to the community rules first.",
+        "커뮤니티 이용이 제한된 계정입니다" to "Your community access is restricted.",
+        "글을 너무 자주 올렸습니다. 잠시 후 다시 올려 주세요" to "You're posting too often. Please try again shortly.",
+        "댓글을 너무 자주 달았습니다. 잠시 후 다시 달아 주세요" to "You're commenting too often. Please try again shortly.",
+        "카테고리를 다시 골라 주세요" to "Please choose a valid category.",
+        "사용할 수 없는 표현이 들어 있습니다. 고쳐서 다시 올려 주세요" to "Your text contains words that aren't allowed. Please edit and try again.",
+        "댓글은 1~1000자입니다" to "Comments must be 1–1000 characters.",
+        "답글에는 다시 답글을 달 수 없습니다" to "You can't reply to a reply.",
+        "대상은 POST 또는 COMMENT 입니다" to "Target must be POST or COMMENT.",
+        "내가 쓴 글은 신고할 수 없습니다" to "You can't report your own content.",
+        "신고 사유를 다시 골라 주세요" to "Please choose a valid report reason.",
+        "이미 신고했습니다" to "You've already reported this.",
+        "처리 방법은 HIDE·RESTORE·DELETE·DISMISS 입니다" to "Action must be HIDE, RESTORE, DELETE or DISMISS.",
+        "제한 기간은 1·7·30일 또는 영구입니다" to "Restriction must be 1, 7 or 30 days, or permanent.",
         // 공통
         "권한이 없습니다" to "You don't have permission to do this.",
         "인증에 실패했습니다" to "Authentication failed.",
