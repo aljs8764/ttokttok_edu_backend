@@ -173,6 +173,14 @@
   - 웹: `t('원문', {0: 값})` 자리표시, 컴포넌트 밖 헬퍼용 `translate()`, 화면 문구 사전 `src/lib/i18n-en.ts`(약 1,270개, dayjs 형식 문자열 포함). 클라이언트 화면 전부를 코드모드로 `t()` 감쌈(컴포넌트마다 `const t = useT()`, 이미 `t` 변수가 있는 파일은 `tr`). 언어는 `ttok_locale` 쿠키에도 저장 → BFF(proxy·proxy-public·로그인·OTP·초대 수락)가 `Accept-Language` 전달. `errorMessage()` 는 BFF 한국어 문장도 사전 변환. 남은 것: 서버 컴포넌트 metadata(브라우저 탭 제목), 시작하기(onboarding, 사용자 미커밋 변경이 있어 제외), 사용자가 고르는 데이터 값(관계 '어머니' 등 — 표시만 번역, 저장 값은 한국어)
   - 앱: 어디서나 쓰는 `tr('원문', [값])`·`dateLocale()`·`currentLocale`(core/i18n/i18n.dart), 사전 `core/i18n/i18n_en.dart`(약 430개). 화면 문구를 코드모드로 `tr()` 감싸고 그 자리의 `const` 를 뗌(빌드 때 남은 const 오류가 있으면 해당 `const` 제거). 언어를 바꾸면 `MaterialApp.router` builder 의 `KeyedSubtree(ValueKey(locale))` 로 전체 다시 그림. 날짜 `DateFormat(tr('M월 d일 (E)'), dateLocale())`, bootstrap 에 `initializeDateFormatting('en_US')` 추가. Dio(ApiClient 의 dio·_raw, StudentApi)가 `Accept-Language` 전송. 제외: 교사 attachment_field·content_repository·event_detail_screen(사용자 미커밋 변경)
   - 공통 남은 것: 서버가 만들어 저장·발송하는 한국어(푸시 본문, 엑셀 시트·헤더, 사용량 경고 문장, 엑셀 업로드 행 오류, 안드로이드 알림 채널 이름)
+- P3-⑥ 역할별 대시보드 DASH-008~023 (2026-10-12 기능명세서 v1.1 추가분; 백엔드 4212111, 웹 6e5dc07, 앱 6e69e53): V25.
+  - 백엔드(`RoleDashboard*`): 원장·실장 `GET /dashboard/owner/{kpi,classes,inbox,billing,churn-risks,staff}`, `GET /me/dashboard/institutions`(기관 헤더 없음, 원장·실장 소속 기관 비교). 반 현황 배지 NO_TEACHER·FULL·MISSING·LOW_READ(반 평균 −10%p, 반 2개 이상일 때). 이탈 위험은 `OwnerDashboardService.score` 규칙 점수(결석률 +20%p·결석 3회↑ +40, 30일 알림장 3건↑ 중 70%↑ 미열람 +25, 60일 상담일지 퇴원·그만·옮기·이사·중단·휴원 언급 +30, 연체 +20, 90일 휴원 복귀 +15; 40점↑만, 기관별 조정은 아직 없음). 지난달 재원생은 '현재 − 이번 달 신규 + 이번 달 퇴원' 근사.
+  - 교사 `GET /dashboard/teacher?teacherId=` — 본인이 담당한 반 기준(원장·실장도 자기 담당 반만), 다른 교직원 것은 원장·실장만(웹 '교사 화면 보기', 읽기 전용). 미등원 = 시작+기관 지각 기준 경과 SCHEDULED(결석 신청 제외), 하원 미처리 = 종료 30분 경과 IN, 보호자 번호(대표 우선) 복호화 포함. 주의 원생은 오늘 출결 대상 중 건강(알레르기·지병)·생일·당일 사전 신청·최근 7일 상담일지 — text/sub 는 입력 데이터 그대로라 라벨은 화면이 kind 로 붙임.
+  - 교직원 공지 `staff_memo`(+target, ack): `POST/GET /staff-memos`(원장·실장, 대상 비우면 전체 교직원), `GET /staff-memos/{id}/acks`, `DELETE /staff-memos/{id}`(취소), `GET /staff-memos/mine`, `POST /staff-memos/{id}/ack`(본문 없음 = 읽음, {done}=완료 표시/해제). 받는 교직원에게 교사 푸시 type `staff_memo`(템플릿 STAFF_MEMO).
+  - 위젯 배치 `user_dashboard_layout`: `GET/PUT/DELETE /me/dashboard-layout/{OWNER|TEACHER}` {widgets:[{key,visible}]}. 저장 없으면 빈 목록 → 화면 기본 배치, 새 위젯은 끝에 보이게 붙음(`mergeLayout`).
+  - 웹: `/dashboard` 가 역할로 분기(원장·실장 = 원장 대시보드: 경영 KPI·처리 대기함·반별 현황·수납·이탈 위험·교직원·공지·기관 비교 + 기존 DASH-001~007, 교사 = 교사 대시보드 6개 위젯). `?teacherId=` 교사 화면 보기, '위젯 설정' 다이얼로그. 파일 `src/lib/dashboard.ts`, `src/components/dashboard/*`. page 에 Suspense 추가.
+  - 앱: 교사 홈 맨 위 '오늘 할 일' 요약 카드 → `/today`(`features/teacher/teacher_dashboard.dart`), 출퇴근·공지 완료·보호자 전화(tel:). 진도 기록은 앱에 화면이 없어 안내만.
+  - 남은 것: 이탈 위험 기준의 기관별 설정, 앱 위젯 배치(웹만), 다기관 비교의 기관 전환은 웹만
 
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
