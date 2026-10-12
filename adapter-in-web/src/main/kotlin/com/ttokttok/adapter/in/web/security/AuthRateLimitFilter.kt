@@ -1,5 +1,6 @@
 package com.ttokttok.adapter.`in`.web.security
 
+import com.ttokttok.adapter.`in`.web.api.RequestLanguage
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -43,7 +44,8 @@ class AuthRateLimitFilter(
             response.setHeader("Retry-After", (60 - (System.currentTimeMillis() / 1000) % 60).toString())
             response.contentType = MediaType.APPLICATION_JSON_VALUE
             response.characterEncoding = "UTF-8"
-            response.writer.write("""{"code":"TOO_MANY_REQUESTS","message":"요청이 너무 많습니다. 잠시 후 다시 시도하세요"}""")
+            val message = if (RequestLanguage.isEnglish(request)) "Too many requests. Please try again shortly." else "요청이 너무 많습니다. 잠시 후 다시 시도하세요"
+            response.writer.write("""{"code":"TOO_MANY_REQUESTS","message":"$message"}""")
             return
         }
         if (windows.size > MAX_KEYS) windows.entries.removeIf { it.value.minute < minute } // 지난 창 정리
