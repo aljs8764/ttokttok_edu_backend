@@ -44,7 +44,7 @@ object ErrorMessagesEn {
         "할인 규칙" to "Discount rule", "출석 QR" to "Check-in QR", "초대 링크" to "Invitation link", "체험 기관" to "Demo institution",
         "이동할 반" to "Target class", "업로드 작업" to "Upload job", "아이" to "Child", "셔틀 운행" to "Shuttle trip",
         "상담 예약" to "Consultation booking", "보호자" to "Guardian", "기기" to "Device", "교재" to "Textbook", "계정" to "Account",
-        "경고" to "Alert", "이 기관" to "this institution",
+        "경고" to "Alert", "이 기관" to "this institution", "교직원" to "Staff member",
         // 라벨
         "내용" to "Content", "제목" to "Title", "결석" to "Absence", "지각" to "Late arrival", "조퇴" to "Early leave",
         "수정" to "edited", "취소" to "canceled", "발송" to "sent", "카카오" to "Kakao", "네이버" to "Naver",
@@ -405,6 +405,15 @@ object ErrorMessagesEn {
         "리포트에 넣을 항목을 하나 이상 고르세요" to "Choose at least one section for the report.",
         "반을 1~20개 고르세요" to "Choose 1–20 classes.",
         "자동 로그아웃은 5~480분 또는 0(끔)입니다" to "Auto sign-out must be 5–480 minutes, or 0 (off).",
+        // 역할별 대시보드·교직원 공지
+        "다른 선생님의 대시보드는 원장·실장만 볼 수 있습니다" to "Only owners and managers can view another teacher's dashboard.",
+        "내용은 2000자 이내입니다" to "Content must be 2000 characters or fewer.",
+        "받은 공지가 아닙니다" to "You did not receive this memo.",
+        "취소된 공지입니다" to "This memo has been canceled.",
+        "대시보드 종류는 OWNER, TEACHER 입니다" to "Dashboard kind must be OWNER or TEACHER.",
+        "위젯은 30개까지입니다" to "You can have up to 30 widgets.",
+        "위젯 이름이 올바르지 않습니다" to "Invalid widget name.",
+        "같은 위젯이 두 번 들어 있습니다" to "The same widget appears twice.",
         // 사유
         "사유를 입력해 주세요" to "Please enter a reason.",
         "사유는 200자 이내입니다" to "Reason must be 200 characters or fewer.",
