@@ -181,6 +181,14 @@
   - 웹: `/dashboard` 가 역할로 분기(원장·실장 = 원장 대시보드: 경영 KPI·처리 대기함·반별 현황·수납·이탈 위험·교직원·공지·기관 비교 + 기존 DASH-001~007, 교사 = 교사 대시보드 6개 위젯). `?teacherId=` 교사 화면 보기, '위젯 설정' 다이얼로그. 파일 `src/lib/dashboard.ts`, `src/components/dashboard/*`. page 에 Suspense 추가.
   - 앱: 교사 홈 맨 위 '오늘 할 일' 요약 카드 → `/today`(`features/teacher/teacher_dashboard.dart`), 출퇴근·공지 완료·보호자 전화(tel:). 진도 기록은 앱에 화면이 없어 안내만.
   - 남은 것: 이탈 위험 기준의 기관별 설정, 앱 위젯 배치(웹만), 다기관 비교의 기관 전환은 웹만
+- P3-⑦ 익명 커뮤니티 COM-001~009 (2026-10-12 기능명세서 v1.2 추가분; 백엔드 49ff88b, 웹 de8f184, 앱 e847118): V26. 학생 커뮤니티 COM-010 은 보류(미성년자 보호 설계 후).
+  - 게시판은 표 없이 키로: `L-OWNER`(원장)·`L-STAFF`(실장·교사)·`L-PARENT`(학부모) 전국 라운지, `I-{기관ID}-STAFF`·`I-{기관ID}-PARENT` 우리 기관. 자격은 매 요청 재계산 — 교직원 membership(OWNER/ADMIN/TEACHER), 학부모 = guardian.user_id 연결(LINKED)·퇴원 아닌 자녀. 샘플 기관·service_status≠ACTIVE 제외. 기관 헤더 없이 사용자 단위(앱은 `noInstitution`).
+  - 익명: author_id 는 저장만, 응답엔 `mine`·익명 번호만. 라운지 글은 '역할 · 시도'(institution.address 첫 단어 → 서울·경기·충북 …), 기관 게시판은 표시 없음('익명'). 댓글은 글마다 고정 번호(`community_anon`, 0 = 글쓴이), 답글 한 단계, 삭제 댓글은 '삭제된 댓글'로 남김.
+  - API `/community/boards|me|rules`, `/community/boards/{key}/posts?sort=LATEST|POPULAR&category&q&page`(20건, 인기 = 최근 7일 공감×2+댓글), `/community/posts/{id}`(GET·PUT·DELETE), `/posts/{id}/comments`, `/comments/{id}`, `/{posts|comments}/{id}/like|report`, `/community/me/posts|comments`(내 글 첫 페이지를 보면 새 댓글 수 초기화).
+  - 안전: 첫 글·댓글 전에 이용 규칙 동의(`RULES_REQUIRED`), 전화번호·이메일 자동 가림, 금칙어 차단(`CommunityService.BANNED` — 운영하며 보강), 글 10분 5건·댓글 1분 10건 제한, 신고(사유 5종, 1인 1회, 본인 글 불가) 서로 다른 신고 라운지 5·기관 3건이면 REPORTED 숨김(작성자에게만 보임).
+  - 운영사(COM-008): `/platform/community/reports?status=OPEN|RESOLVED`, `/platform/community/{POST|COMMENT}/{id}/resolve`{action HIDE·RESTORE·DELETE·DISMISS}·`sanction`{days 1·7·30|null=영구, reason}·`lift-sanction`. 콘솔에도 작성자 신원은 안 보이고 글·댓글로만 제재. 수사기관 요청 등은 DB 에서 author_id 조회.
+  - 웹 `/community`(소통 메뉴, 원장·실장·교사), 운영 콘솔 '커뮤니티 신고' 탭. 앱 `/community`·`/community/me`·`/community/posts/:id` — 교사앱 계정 메뉴, 학부모앱 더보기 '학부모 커뮤니티'. 학생앱 없음.
+  - 남은 것: 댓글 알림 푸시(현재 푸시 이벤트가 기관 단위라 '내 활동' 새 댓글 수만), 금칙어 목록 운영 관리 화면, 이미지 첨부(익명성·초상권 때문에 보류), 신고 처리 결과 통지
 
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
