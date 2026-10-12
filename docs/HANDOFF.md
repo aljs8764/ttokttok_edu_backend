@@ -1,4 +1,4 @@
-# 똑똑 백엔드·관리자 웹·앱 — 인계 메모 (2026-10-08)
+# 똑똑 백엔드·관리자 웹·앱 — 인계 메모 (2026-10-12)
 
 > **기준 문서는 백엔드 저장소의 `docs/HANDOFF.md`** (2026-10-07 결정). claude.ai 프로젝트의 `claude/backend/HANDOFF.md` 는 이 날짜 시점의 사본이라 이후 갱신되지 않는다. 진행 상황 갱신은 저장소 쪽에만 한다.
 
@@ -168,6 +168,11 @@
 - P3-③ 플랫폼 (백엔드 e82d7d4, 웹 a3e526b, 앱 f05569e): V24.
   - SAAS-006: `UsageMeteringFilter`(보안 필터 앞, `/api/v1/**` 중 `X-Institution-Id` 있는 요청을 기관×시간으로 요청·5xx·401/403·429·사용자 수, 로그인 성공·실패는 플랫폼 행 00000000-…) → 1분마다 `api_usage_hourly` upsert. `UsageAnomalyScheduler` 매시 5분(ShedLock `usage.detect`): 직전 7일 같은 시각 평균 대비 5배·300건 이상 급증, 오류율 10%(50건 이상), 401·403 100건, 429 20건, 로그인 실패 100회, 매일 9시 판정분에 3일 무사용 → `usage_alert`(기관·종류·시각 유일). 90일 지난 사용량 04:20 삭제. API `/platform/usage?days`, `/platform/usage/hourly`, `/platform/usage-alerts`(+`/{id}/ack`). 웹 운영 콘솔 > 사용량·이상 탐지. 학부모 `/me` 요청은 기관 헤더가 없어 기관별 집계에서 빠짐. 필터가 `UsageMeteringUseCase` 를 받으므로 `@WebMvcTest` 슬라이스 테스트는 MockBean 추가 필요
   - SET-007(부분): `app_user.locale`(ko·en), `GET/PUT /me/locale`. 웹 `lib/i18n.tsx`(한국어 문구 키 사전, localStorage + 계정 동기화, 날짜 선택기 로케일) — 사이드·계정 메뉴, 화면 제목, 설정 탭, 로그인 화면만 영어. 앱 `core/i18n/i18n.dart` — 하단 탭·더보기만. 나머지 화면 문구와 서버 오류 메시지(한국어 하드코딩)는 화면별로 사전에 더해 나가야 함
+- SET-007 이어서 (2026-10-12, 백엔드 1b76a36, 웹 684c601, 앱 ef1a512): 
+  - 백엔드: `RequestLanguage`(Accept-Language 첫 언어가 en 이면 영어, 헤더 없으면 한국어 — JVM 로캘 무관), `ErrorMessagesEn`(한국어 문장 그대로 → 숫자·이름이 낀 문장 정규식 → 코드별 → 상태별 순으로 영어). `ErrorHandler`·`AuthRateLimitFilter` 가 요청 언어로 응답, 검증 오류 details 도 영어. code 는 언어와 무관. 새 오류 문장을 추가하면 `ErrorMessagesEn.EXACT`/`PATTERNS` 에 영어도 넣을 것(없으면 코드·상태별 일반 문장)
+  - 웹: `t('원문', {0: 값})` 자리표시, 컴포넌트 밖 헬퍼용 `translate()`, 화면 문구 사전 `src/lib/i18n-en.ts`(약 1,270개, dayjs 형식 문자열 포함). 클라이언트 화면 전부를 코드모드로 `t()` 감쌈(컴포넌트마다 `const t = useT()`, 이미 `t` 변수가 있는 파일은 `tr`). 언어는 `ttok_locale` 쿠키에도 저장 → BFF(proxy·proxy-public·로그인·OTP·초대 수락)가 `Accept-Language` 전달. `errorMessage()` 는 BFF 한국어 문장도 사전 변환. 남은 것: 서버 컴포넌트 metadata(브라우저 탭 제목), 시작하기(onboarding, 사용자 미커밋 변경이 있어 제외), 사용자가 고르는 데이터 값(관계 '어머니' 등 — 표시만 번역, 저장 값은 한국어)
+  - 앱: 어디서나 쓰는 `tr('원문', [값])`·`dateLocale()`·`currentLocale`(core/i18n/i18n.dart), 사전 `core/i18n/i18n_en.dart`(약 430개). 화면 문구를 코드모드로 `tr()` 감싸고 그 자리의 `const` 를 뗌(빌드 때 남은 const 오류가 있으면 해당 `const` 제거). 언어를 바꾸면 `MaterialApp.router` builder 의 `KeyedSubtree(ValueKey(locale))` 로 전체 다시 그림. 날짜 `DateFormat(tr('M월 d일 (E)'), dateLocale())`, bootstrap 에 `initializeDateFormatting('en_US')` 추가. Dio(ApiClient 의 dio·_raw, StudentApi)가 `Accept-Language` 전송. 제외: 교사 attachment_field·content_repository·event_detail_screen(사용자 미커밋 변경)
+  - 공통 남은 것: 서버가 만들어 저장·발송하는 한국어(푸시 본문, 엑셀 시트·헤더, 사용량 경고 문장, 엑셀 업로드 행 오류, 안드로이드 알림 채널 이름)
 
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
