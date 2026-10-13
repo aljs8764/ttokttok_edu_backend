@@ -189,6 +189,13 @@
   - 운영사(COM-008): `/platform/community/reports?status=OPEN|RESOLVED`, `/platform/community/{POST|COMMENT}/{id}/resolve`{action HIDE·RESTORE·DELETE·DISMISS}·`sanction`{days 1·7·30|null=영구, reason}·`lift-sanction`. 콘솔에도 작성자 신원은 안 보이고 글·댓글로만 제재. 수사기관 요청 등은 DB 에서 author_id 조회.
   - 웹 `/community`(소통 메뉴, 원장·실장·교사), 운영 콘솔 '커뮤니티 신고' 탭. 앱 `/community`·`/community/me`·`/community/posts/:id` — 교사앱 계정 메뉴, 학부모앱 더보기 '학부모 커뮤니티'. 학생앱 없음.
   - 남은 것: 댓글 알림 푸시(현재 푸시 이벤트가 기관 단위라 '내 활동' 새 댓글 수만), 금칙어 목록 운영 관리 화면, 이미지 첨부(익명성·초상권 때문에 보류), 신고 처리 결과 통지
+- 앱 UI/UX 디자인 적용 (2026-10-13, 앱 f2096fb): 기준 = 프로젝트 문서 `claude/design/app_uiux_design.md`·디자인 캔버스(42화면). 이번엔 P1 핵심 화면 + 공통 테마.
+  - 공통: `app/theme.dart` 토큰 교체(Ink #17233A·Ground #F4F2EC·Accent #FFCE3D, 등원 #E3EAFD/#1F47B8·하원 #FCE9DA/#9A400A·버튼 #C2560F·예정·경고 bg/fg 쌍, 모서리 카드 16–22·버튼 16), 서체 IBM Plex Sans KR 번들(`assets/fonts`, OFL → **flutter pub get 다시**). Accent 노랑은 흰 바탕 글자 대비가 안 나와 채움 전용, 기존에 글자·아이콘으로 쓰던 `AppColors.accent` 는 `highlight`(#D9480F)로 바꿈. 기존 의미 이름(primary·success·info 등)은 새 토큰에 연결해 나머지 화면도 색이 따라감. `StatusBadge`·`Pill.tone` bg/fg 쌍, `core/widgets/logo_mark.dart`
+  - 로그인(P_Login·T_Login): 학부모 Ground 라이트, 교사 Ink 다크 + Accent 로그인 버튼, 간편 로그인 2열. 비밀번호 찾기(AUTH-004·005) 화면은 앱에 아직 없어 링크 생략
+  - 학부모(Main): 헤더 로고·알림 버튼(알림 센터 PAR-002 화면이 없어 알림장 탭으로), 자녀 버튼(이니셜 아바타, 선택 = Ink), 오늘 아이별 '지금' 다크 카드(타임라인 최신 기록으로 — 다음 일정 줄은 데이터 없어 생략), 안 읽은 알림장·응답 대기 행사 카드, 레일형 타임라인. 하단 탭 5개 홈·알림장·일정·행사·더보기(`ScheduleTab(section:)` 로 일정/행사 분리, 푸시 event → 탭 3)
+  - 교사(T_Classes·T_Attendance·T_Dismiss): 첫 탭 이름 '내 반', 홈 제목 '내 담당 반 N개', 반 카드에 오늘 등원·미등원·결석(`/dashboard/teacher` classes 재사용), 맨 아래 알림장 쓰기. 출결 화면 4칸 요약, 흰 카드 목록, [출석] 파랑 / [하원] 주황 테두리, 하단 '미등원 전원 출석'(확인 대화상자)·'일괄 하원'(목적지 하나) — 기존 원터치 경로를 한 명씩 반복. 하원 목적지 시트는 라디오 선택 → [하원 처리 → 목적지] 두 단계로 바뀜
+  - 교사 하단 탭은 디자인(내 반·출결·알림장·원생 4개)이 아니라 기존 5개(내 반·알림장·행사·메시지·신청) 유지 — 원생 상세(STU-009) 화면이 앱에 없음
+  - 남은 것: P2·P3 화면(채팅·앨범·설문·청구·커뮤니티 등)은 테마 색·모서리만 따라감 — 화면별 레이아웃은 미적용. 빌드 검증 안 함(위젯 상수·const 오류 가능)
 
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
