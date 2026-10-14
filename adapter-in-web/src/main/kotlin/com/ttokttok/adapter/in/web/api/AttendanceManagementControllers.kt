@@ -97,6 +97,7 @@ class AttendanceManagementController(
                 null, AttendanceSource.ADMIN_WEB -> AttendanceSource.ADMIN_WEB
                 AttendanceSource.TEACHER_APP -> AttendanceSource.TEACHER_APP
                 AttendanceSource.SYSTEM -> throw InvalidInputException("INVALID_SOURCE", "SYSTEM은 지정할 수 없습니다")
+                AttendanceSource.STUDENT_APP -> throw InvalidInputException("INVALID_SOURCE", "STUDENT_APP은 지정할 수 없습니다")
             },
         ),
     ).toResponse()

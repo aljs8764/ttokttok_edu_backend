@@ -203,6 +203,8 @@
   - ④ Phase 1 화면 (웹 cd895b6·3a6c466): 대시보드(인사 줄·KPI 카드·LIVE 타임라인·세그먼트 탭, 역할별 구조·위젯 설정 유지), 원생 목록(한 카드: 상태 세그먼트·검색·아바타·배지), 데일리 리포트, 알림장·행사 목록, 설정 탭을 화면 머리로. 전 화면 공통: 카드 패딩 20×24, 표 첫·끝 칸 24px(테마), 색 있는 칩 = 배지 톤, 글자 상태색은 *.dark(대비 4.5:1)
   - ⑤ Phase 2 화면 (웹 9f83f0d): 통계·수납·운영사 지표/사용량 KPI = KpiCard, 차트 카드 = SectionCard, 차트 계열색 = `chart` 토큰, 운영사 기관·결제·대기자 필터를 표 카드 안으로, 1:1 메시지·CS 말풍선(디자인 모양). 시간표·셔틀·설문·앨범·근태·행사 달력·구독/알림/보안 설정은 테마로만 적용(화면별 레이아웃 변경 없음)
   - ⑥ Phase 3·마무리 (웹 2c5f7fe·3058e96): 익명 커뮤니티(디자인 없음)를 토큰·공통 컴포넌트로 같은 톤, 교사 업무 리포트 SectionCard, 인쇄·셔틀 지도·QR·로그인 패널 하드코딩 색 → 토큰. 미구현(AD-001~005, EVT-007·008, PAY-004·005, NTC-012)은 화면 만들지 않음. 새 의존성 없음(차트는 기존 SVG, 서체는 next/font). 빌드 미검증 — 사용자 PC 에서 `npm install && npm run build`, 확인 경로는 웹 `docs/design-apply-plan.md` 5절
+  - ⑦ P2 화면별 배치 (웹 f85d3ef, PR #4): 앨범(목록 + 사진 그리드), 시간표(30분 칸 주간 그리드), 교사 근태(오늘 카드 + 근무일 칸), 행사 달력(머리 월 이동·오늘 강조), 설문(카드 목록·결과 타일). 카드 제목 17px 통일. 셔틀·구독/알림/보안 설정·교재·환불/할인 다이얼로그는 아직 테마만
+- 백엔드 CI 컴파일 오류 수정 (2026-10-14, 브랜치 claude/great-maxwell-6rrhge, PR #5): main 의 `./gradlew build` 가 run 7~13 내내 컴파일에서 실패하던 것. application(NoticeServices 스마트 캐스트, ShuttleServices Double?), adapter-out-storage(POI XSSFCellStyle), adapter-in-web(when 에 STUDENT_APP 분기, spring-tx 의존성). 동작 변화 없음
 
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
