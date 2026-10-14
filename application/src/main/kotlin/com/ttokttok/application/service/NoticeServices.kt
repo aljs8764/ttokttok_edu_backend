@@ -303,8 +303,8 @@ class NoticeQueryService(
                 studentId = sid, studentName = names[sid] ?: "(알 수 없음)",
                 classroomNames = enrollments.findCurrent(sid).mapNotNull { classNames[it.classroomId] },
                 read = reads.isNotEmpty(), firstReadAt = reads.minOrNull(), resentCount = rs.maxOf { it.resentCount },
-                guardians = rs.filter { it.guardianUserId != null }.map {
-                    GuardianReceipt(it.guardianUserId!!, userNames.getValue(it.guardianUserId), it.deliveredAt, it.readAt)
+                guardians = rs.mapNotNull { r ->
+                    r.guardianUserId?.let { gid -> GuardianReceipt(gid, userNames.getValue(gid), r.deliveredAt, r.readAt) }
                 },
             )
         }.sortedWith(compareBy({ it.read }, { it.studentName })) // 미열람 먼저
