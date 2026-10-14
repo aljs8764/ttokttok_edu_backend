@@ -199,6 +199,7 @@
 - 관리자 웹 UI/UX 디자인 적용 (2026-10-14~, 브랜치 claude/great-maxwell-6rrhge): 기준 = 디자인 캔버스 「똑똑에듀 어드민 UI」(35화면 + 사이드바 2종). 디자인만 바꾸고 API·쿼리 키·권한·실시간·라우트는 그대로. 계획·매핑·디자인 차이 표 = 웹 `docs/design-apply-plan.md`
   - ① 토큰·테마 (웹 26ff092): `src/theme/tokens.ts`·`src/theme/index.ts`(기존 `src/app/theme.ts` 삭제), IBM Plex Sans KR·Mono 를 next/font/google 로(빌드 PC 인터넷 필요, Pretendard CDN 제거). 버튼 44/32, 카드 12px, 세그먼트 탭, 상태 배지 톤이 테마에서 전 화면에 적용됨
   - ② 공통 컴포넌트 (웹 81bd41e): `src/components/ui/*`(StatusBadge·MenuIdChip·SectionCard·KpiCard·SegmentTabs·ProgressBar·EmptyState), 상태→배지 톤 매핑 `src/theme/status.ts`, PageHeader 흰 바+브레드크럼, 메뉴 구성 `src/components/shell/nav.tsx`. 메뉴ID 칩은 `NEXT_PUBLIC_SHOW_MENU_IDS=false` 로 숨김
+  - ③ 앱 셸 (웹 33ac150): `src/components/shell/Sidebar.tsx`(기관 #1B2559 / 운영사 #10163A), 기관 전환은 사이드바 '현재 기관' 버튼, 계정 메뉴는 하단 사용자 카드로 이동(로직 동일). 운영 콘솔 탭은 `/platform?tab=` 과 동기화돼 운영사 사이드바 메뉴가 됨. 로그인·초대 수락 = `AuthLayout`, 온보딩은 셸 없이(셸이 `/onboarding` 경로로 판단). md 미만은 상단 바 + Drawer
 
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
