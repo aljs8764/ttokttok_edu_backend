@@ -2,6 +2,7 @@ package com.ttokttok.application.port.`in`
 
 import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.UserId
+import com.ttokttok.domain.institution.InstitutionType
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -35,13 +36,23 @@ data class PlatformInstitutionDetail(
     val cardLast4: String?,
     val staffCount: Int,
     val recentPayments: List<PlatformPaymentView>,
+    /** 운영사가 만든 기관의 가장 최근 원장 초대 (없으면 null) */
+    val ownerInvitation: OwnerInvitationView? = null,
 )
+
+data class OwnerInvitationView(val email: String, val name: String, val status: String, val expiresAt: Instant, val acceptedAt: Instant?)
+
+data class CreateInstitution(val institutionName: String, val type: InstitutionType, val ownerName: String, val ownerEmail: String)
 
 interface PlatformInstitutionUseCase {
     fun list(actor: UserId, status: ServiceStatus?, keyword: String?): List<PlatformInstitutionRow>
     fun detail(actor: UserId, institutionId: UUID): PlatformInstitutionDetail
     fun approve(actor: UserId, institutionId: UUID): PlatformInstitutionRow
     fun suspend(actor: UserId, institutionId: UUID, reason: String): PlatformInstitutionRow
+    /** 운영사가 기관을 직접 만들고 원장에게 초대 메일을 보낸다. 원장이 링크에서 수락하면 OWNER 계정이 된다 */
+    fun create(actor: UserId, command: CreateInstitution): PlatformInstitutionDetail
+    /** 원장 초대 다시 보내기 — 대기 중인 초대는 취소하고 새 링크(7일)를 보낸다 */
+    fun resendOwnerInvitation(actor: UserId, institutionId: UUID): PlatformInstitutionDetail
     /** 운영사가 구독 상태를 직접 바꿈 (플랜·상태·다음 결제일) */
     fun overrideSubscription(actor: UserId, institutionId: UUID, planCode: String, status: SubscriptionStatus, nextBillingDate: LocalDate?): PlatformInstitutionDetail
 }
