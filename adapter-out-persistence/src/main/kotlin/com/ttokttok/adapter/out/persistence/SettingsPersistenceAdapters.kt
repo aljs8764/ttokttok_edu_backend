@@ -20,11 +20,13 @@ import com.ttokttok.domain.terms.TermsId
 import com.ttokttok.domain.terms.TermsType
 import com.ttokttok.domain.user.LoginAttempt
 import com.ttokttok.domain.user.Role
+import jakarta.persistence.EntityManager
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.sql.ResultSet
 import java.sql.Timestamp
 import java.time.Instant
@@ -131,7 +133,7 @@ class RefreshTokenJdbcAdapter(private val jdbc: JdbcTemplate) : RefreshTokenPort
 }
 
 @Component
-class StaffInvitationJdbcAdapter(private val jdbc: JdbcTemplate) : StaffInvitationPort {
+class StaffInvitationJdbcAdapter(private val jdbc: JdbcTemplate, private val em: EntityManager) : StaffInvitationPort {
     private val mapper = RowMapper { rs, _ ->
         StaffInvitation(
             id = StaffInvitationId(rs.uuid("id")), institutionId = InstitutionId(rs.uuid("institution_id")),
@@ -142,6 +144,8 @@ class StaffInvitationJdbcAdapter(private val jdbc: JdbcTemplate) : StaffInvitati
     }
 
     override fun save(invitation: StaffInvitation): StaffInvitation {
+        // 운영사 기관 등록(SAAS-001)은 같은 트랜잭션에서 JPA 로 막 저장한 institution 을 FK 로 참조한다 → 먼저 내보낸다
+        if (TransactionSynchronizationManager.isActualTransactionActive()) em.flush()
         jdbc.update(
             """insert into staff_invitation (id, institution_id, email, name, role, token, invited_by, expires_at, accepted_at, revoked_at, created_at)
                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

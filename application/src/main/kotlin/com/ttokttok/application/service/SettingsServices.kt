@@ -201,6 +201,12 @@ class AttendanceEvidenceService(
 
 // ───────── STF-002 교직원 이메일 초대 ─────────
 
+internal fun staffRoleLabel(role: Role) = when (role) {
+    Role.OWNER -> "원장"
+    Role.ADMIN -> "실장"
+    else -> "교사"
+}
+
 @Service
 class StaffInvitationService(
     private val guard: AccessGuard,
@@ -230,7 +236,7 @@ class StaffInvitationService(
         val instName = institutions.findById(institutionId)?.name ?: ""
         this.email.send(
             inv.email, "[똑똑] $instName 교직원 초대",
-            "${inv.name}님, $instName 에서 똑똑 ${roleLabel(role)} 계정으로 초대했습니다.\n" +
+            "${inv.name}님, $instName 에서 똑똑 ${staffRoleLabel(role)} 계정으로 초대했습니다.\n" +
                 "아래 링크에서 7일 안에 수락해 주세요.\n${links.staffInviteUrl(inv.token)}",
         )
         return inv.toView(now)
@@ -274,7 +280,7 @@ class StaffInvitationService(
             users.save(User(UserId.new(), inv.name, inv.email, null, hasher.hash(password), mustChangePassword = false))
         }
         if (memberships.find(user.id, inv.institutionId) != null) throw ConflictException("ALREADY_MEMBER", "이미 소속된 직원입니다")
-        memberships.save(Membership(MembershipId.new(), user.id, inv.institutionId, inv.role))
+        memberships.save(Membership(MembershipId.new(), user.id, inv.institutionId, inv.role, if (inv.role == Role.OWNER) "원장" else null))
         invitations.save(inv.accept(now))
         return assembler.assemble(user)
     }
@@ -296,7 +302,6 @@ class StaffInvitationService(
         expiresAt = expiresAt, acceptedAt = acceptedAt,
     )
 
-    private fun roleLabel(role: Role) = if (role == Role.ADMIN) "실장" else "교사"
 }
 
 // ───────── 세션 (refresh 회전) ─────────

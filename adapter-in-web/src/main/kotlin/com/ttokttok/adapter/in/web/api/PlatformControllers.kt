@@ -1,6 +1,7 @@
 package com.ttokttok.adapter.`in`.web.api
 
 import com.ttokttok.application.port.`in`.ActivePlatformNoticeQuery
+import com.ttokttok.application.port.`in`.CreateInstitution
 import com.ttokttok.application.port.`in`.InstitutionSupportUseCase
 import com.ttokttok.application.port.`in`.PlatformAccessQuery
 import com.ttokttok.application.port.`in`.PlatformBillingUseCase
@@ -24,6 +25,7 @@ import com.ttokttok.application.port.`in`.VoucherUseCase
 import com.ttokttok.application.port.`in`.VoucherView
 import com.ttokttok.application.port.out.ClockPort
 import com.ttokttok.domain.common.InvalidInputException
+import com.ttokttok.domain.institution.InstitutionType
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -63,6 +65,9 @@ private fun PlatformInstitutionDetail.toResponse() = row.toResponse() + mapOf(
     "nextBillingDate" to nextBillingDate, "trialEndsOn" to trialEndsOn, "cancelAtPeriodEnd" to cancelAtPeriodEnd,
     "card" to cardLast4?.let { mapOf("brand" to cardBrand, "last4" to it) }, "staffCount" to staffCount,
     "recentPayments" to recentPayments.map { it.toResponse() },
+    "ownerInvitation" to ownerInvitation?.let {
+        mapOf("email" to it.email, "name" to it.name, "status" to it.status, "expiresAt" to it.expiresAt, "acceptedAt" to it.acceptedAt)
+    },
 )
 
 private fun VoucherView.toResponse() = mapOf(
@@ -123,6 +128,23 @@ class PlatformInstitutionController(private val institutions: PlatformInstitutio
     @GetMapping("/api/v1/platform/institutions")
     fun list(@AuthenticationPrincipal jwt: Jwt, @RequestParam(required = false) status: String?, @RequestParam(required = false) q: String?) =
         institutions.list(jwt.userId(), parseEnum(status, ServiceStatus::valueOf, "INVALID_STATUS"), q).map { it.toResponse() }
+
+    data class CreateRequest(
+        @field:NotBlank @field:Size(max = 100) val institutionName: String,
+        val type: InstitutionType = InstitutionType.ACADEMY,
+        @field:NotBlank @field:Size(max = 50) val ownerName: String,
+        @field:NotBlank val ownerEmail: String,
+    )
+
+    /** 운영사가 기관을 등록하고 원장에게 초대 메일 발송 */
+    @PostMapping("/api/v1/platform/institutions")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun create(@AuthenticationPrincipal jwt: Jwt, @Valid @RequestBody req: CreateRequest) =
+        institutions.create(jwt.userId(), CreateInstitution(req.institutionName, req.type, req.ownerName, req.ownerEmail)).toResponse()
+
+    @PostMapping("/api/v1/platform/institutions/{id}/owner-invitation")
+    fun resendOwnerInvitation(@AuthenticationPrincipal jwt: Jwt, @PathVariable id: UUID) =
+        institutions.resendOwnerInvitation(jwt.userId(), id).toResponse()
 
     @GetMapping("/api/v1/platform/institutions/{id}")
     fun detail(@AuthenticationPrincipal jwt: Jwt, @PathVariable id: UUID) = institutions.detail(jwt.userId(), id).toResponse()
