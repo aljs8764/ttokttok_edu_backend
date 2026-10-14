@@ -1,4 +1,6 @@
 // 유스케이스 + 포트. 허용 의존: domain, spring-context(애노테이션), spring-tx(트랜잭션 경계)
+// plugin.spring: @Service·@Transactional 클래스를 open 으로 (스프링이 CGLIB 프록시를 만들 수 있게)
+plugins { kotlin("plugin.spring") }
 dependencies {
     api(project(":domain"))
     implementation("org.springframework:spring-context")

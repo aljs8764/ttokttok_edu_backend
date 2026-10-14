@@ -97,7 +97,7 @@ class GuardianEntity(
     var studentId: UUID,
     var phoneEnc: String,
     var phoneHash: String,
-    var phoneLast4: String,
+    @JdbcTypeCode(SqlTypes.CHAR) var phoneLast4: String, // DB 는 char(4) (V1)
     var relation: String?,
     var isPrimary: Boolean,
     var userId: UUID?,
