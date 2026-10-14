@@ -18,7 +18,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request
 import java.util.UUID
 
-/** SAAS-001 운영사 기관 등록 → 원장 초대 메일 → 재발송 → 수락하면 OWNER 로 업무 API 사용 */
+/** SAAS-001 운영사 기관 등록·원장 초대, SAAS-009 운영사 계정 관리, SAAS-008 메뉴 그룹 */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -79,6 +79,68 @@ class PlatformInstitutionIntegrationTest {
         detail["ownerInvitation"]["status"].asText() shouldBe "ACCEPTED"
         detail["staffCount"].asInt() shouldBe 1
         call(HttpMethod.POST, "/api/v1/platform/institutions/$instId/owner-invitation", adminToken, null, null).expect(409)
+    }
+
+    @Test
+    fun `운영사 계정을 화면에서 지정·해제한다`() {
+        val outsiderMail = "outsider-$run@ttok.dev"
+        call(HttpMethod.GET, "/api/v1/platform/admins", outsiderToken, null, null).expect(403)
+
+        call(HttpMethod.POST, "/api/v1/platform/admins", adminToken, null, mapOf("email" to "nobody-$run@ttok.dev")).expect(404)
+        val added = call(HttpMethod.POST, "/api/v1/platform/admins", adminToken, null, mapOf("email" to outsiderMail.uppercase())).expect(201)
+        added["email"].asText() shouldBe outsiderMail
+        call(HttpMethod.POST, "/api/v1/platform/admins", adminToken, null, mapOf("email" to outsiderMail)).expect(409)
+
+        // 새 운영사는 콘솔 API 를 쓸 수 있다
+        call(HttpMethod.GET, "/api/v1/platform/me", outsiderToken, null, null).expect(200)["platformAdmin"].asBoolean() shouldBe true
+        val outsiderId = added["userId"].asText()
+        val admins = call(HttpMethod.GET, "/api/v1/platform/admins", outsiderToken, null, null).expect(200)
+        admins.any { it["userId"].asText() == outsiderId } shouldBe true
+
+        // 자기 자신은 해제 불가, 다른 운영사가 해제
+        call(HttpMethod.DELETE, "/api/v1/platform/admins/$outsiderId", outsiderToken, null, null).expect(409)
+        call(HttpMethod.DELETE, "/api/v1/platform/admins/$outsiderId", adminToken, null, null).expect(204)
+        call(HttpMethod.GET, "/api/v1/platform/admins", outsiderToken, null, null).expect(403)
+    }
+
+    @Test
+    fun `메뉴 그룹을 만들고 기관을 매핑하면 그 기관에서 끈 메뉴가 내려간다`() {
+        val inst = signUp("메뉴학원-$run", "menu-owner-$run@ttok.dev")
+        val ownerToken = inst["accessToken"].asText()
+        val instId = inst["user"]["memberships"][0]["institutionId"].asText()
+
+        // 매핑 전: 모든 메뉴
+        call(HttpMethod.GET, "/api/v1/institution/menus", ownerToken, instId, null).expect(200)["disabledMenus"].size() shouldBe 0
+
+        call(HttpMethod.POST, "/api/v1/platform/menu-groups", outsiderToken, null, mapOf("name" to "x")).expect(403)
+        call(HttpMethod.POST, "/api/v1/platform/menu-groups", adminToken, null, mapOf("name" to "전체-$run")).expect(201)
+        val minimal = call(HttpMethod.POST, "/api/v1/platform/menu-groups", adminToken, null,
+            mapOf("name" to "최소-$run", "disabledMenus" to listOf("/dashboard", "/shuttle"))).expect(201)
+        val groupId = minimal["id"].asText()
+        call(HttpMethod.POST, "/api/v1/platform/menu-groups", adminToken, null, mapOf("name" to "최소-$run")).expect(409)
+        call(HttpMethod.POST, "/api/v1/platform/menu-groups", adminToken, null,
+            mapOf("name" to "잘못-$run", "disabledMenus" to listOf("dashboard; drop"))).expect(400)
+
+        // 그룹에 기관 매핑 → 기관 화면에 끈 메뉴
+        val mapped = call(HttpMethod.PUT, "/api/v1/platform/menu-groups/$groupId/institutions", adminToken, null,
+            mapOf("institutionIds" to listOf(instId))).expect(200)
+        mapped["institutions"][0]["id"].asText() shouldBe instId
+        val menus = call(HttpMethod.GET, "/api/v1/institution/menus", ownerToken, instId, null).expect(200)
+        menus["menuGroupName"].asText() shouldBe "최소-$run"
+        menus["disabledMenus"].map { it.asText() }.toSet() shouldBe setOf("/dashboard", "/shuttle")
+        call(HttpMethod.GET, "/api/v1/platform/institutions/$instId", adminToken, null, null).expect(200)["menuGroupId"].asText() shouldBe groupId
+
+        // 그룹 수정: 대시보드만 끔
+        call(HttpMethod.PUT, "/api/v1/platform/menu-groups/$groupId", adminToken, null,
+            mapOf("name" to "최소-$run", "disabledMenus" to listOf("/dashboard"))).expect(200)
+        call(HttpMethod.GET, "/api/v1/institution/menus", ownerToken, instId, null).expect(200)["disabledMenus"].map { it.asText() } shouldBe listOf("/dashboard")
+
+        // 기관 단위 해제 → 모든 메뉴, 다시 지정 후 그룹 삭제 → 모든 메뉴
+        call(HttpMethod.PUT, "/api/v1/platform/institutions/$instId/menu-group", adminToken, null, mapOf("menuGroupId" to null)).expect(204)
+        call(HttpMethod.GET, "/api/v1/institution/menus", ownerToken, instId, null).expect(200)["disabledMenus"].size() shouldBe 0
+        call(HttpMethod.PUT, "/api/v1/platform/institutions/$instId/menu-group", adminToken, null, mapOf("menuGroupId" to groupId)).expect(204)
+        call(HttpMethod.DELETE, "/api/v1/platform/menu-groups/$groupId", adminToken, null, null).expect(204)
+        call(HttpMethod.GET, "/api/v1/institution/menus", ownerToken, instId, null).expect(200)["menuGroupId"].isNull shouldBe true
     }
 
     private fun signUp(name: String, mail: String) = call(HttpMethod.POST, "/api/v1/auth/institutions", null, null,

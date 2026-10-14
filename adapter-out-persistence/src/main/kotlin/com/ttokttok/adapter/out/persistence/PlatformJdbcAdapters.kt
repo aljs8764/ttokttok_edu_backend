@@ -1,5 +1,8 @@
 package com.ttokttok.adapter.out.persistence
 
+import com.ttokttok.application.port.`in`.MenuGroupInstitution
+import com.ttokttok.application.port.`in`.MenuGroupView
+import com.ttokttok.application.port.`in`.PlatformAdminView
 import com.ttokttok.application.port.`in`.PlatformInstitutionRow
 import com.ttokttok.application.port.`in`.PlatformNoticeKind
 import com.ttokttok.application.port.`in`.PlatformNoticeView
@@ -13,6 +16,7 @@ import com.ttokttok.application.port.`in`.VoucherSettlementView
 import com.ttokttok.application.port.`in`.VoucherUseCase
 import com.ttokttok.application.port.`in`.VoucherView
 import com.ttokttok.application.port.out.InstitutionServicePort
+import com.ttokttok.application.port.out.MenuGroupPort
 import com.ttokttok.application.port.out.MonthStats
 import com.ttokttok.application.port.out.PlatformAdminPort
 import com.ttokttok.application.port.out.PlatformInstitutionPort
@@ -52,9 +56,100 @@ class PlatformAdminJdbcAdapter(jdbc: JdbcTemplate) : PlatformAdminPort, Institut
     override fun isAdmin(userId: UserId): Boolean =
         named.queryForObject("select exists(select 1 from platform_admin where user_id = :u)", pp("u" to userId.value), Boolean::class.java) ?: false
 
+    override fun list(): List<PlatformAdminView> = named.query(
+        "select u.id, u.name, u.email, a.created_at from platform_admin a join app_user u on u.id = a.user_id order by a.created_at",
+        pp(),
+    ) { rs, _ -> PlatformAdminView(rs.pid("id"), rs.getString("name"), rs.getString("email"), rs.pts("created_at")!!) }
+
+    override fun add(userId: UserId, now: Instant) {
+        named.update("insert into platform_admin (user_id, created_at) values (:u, :now) on conflict do nothing", pp("u" to userId.value, "now" to pts(now)))
+    }
+
+    override fun remove(userId: UserId) {
+        named.update("delete from platform_admin where user_id = :u", pp("u" to userId.value))
+    }
+
     override fun status(institutionId: InstitutionId): ServiceStatus =
         named.query("select service_status from institution where id = :i", pp("i" to institutionId.value), RowMapper { rs, _ -> ServiceStatus.valueOf(rs.getString(1)) })
             .firstOrNull() ?: ServiceStatus.ACTIVE
+}
+
+// ───────── SAAS-008 메뉴 그룹 ─────────
+@Component
+class MenuGroupJdbcAdapter(jdbc: JdbcTemplate) : MenuGroupPort {
+    private val named = NamedParameterJdbcTemplate(jdbc)
+
+    private data class Head(val id: UUID, val name: String, val description: String?, val createdAt: Instant, val updatedAt: Instant)
+
+    private fun load(where: String, params: MapSqlParameterSource): List<MenuGroupView> {
+        val heads = named.query("select * from menu_group $where order by name", params) { rs, _ ->
+            Head(rs.pid("id"), rs.getString("name"), rs.getString("description"), rs.pts("created_at")!!, rs.pts("updated_at")!!)
+        }
+        if (heads.isEmpty()) return emptyList()
+        val ids = pp("ids" to heads.map { it.id })
+        val disabled = named.query("select menu_group_id, menu_key from menu_group_disabled_menu where menu_group_id in (:ids)", ids) { rs, _ ->
+            rs.pid("menu_group_id") to rs.getString("menu_key")
+        }.groupBy({ it.first }, { it.second })
+        val insts = named.query(
+            "select m.menu_group_id, i.id, i.name from institution_menu_group m join institution i on i.id = m.institution_id " +
+                "where m.menu_group_id in (:ids) order by i.name",
+            ids,
+        ) { rs, _ -> rs.pid("menu_group_id") to MenuGroupInstitution(rs.pid("id"), rs.getString("name")) }
+            .groupBy({ it.first }, { it.second })
+        return heads.map { h ->
+            MenuGroupView(h.id, h.name, h.description, disabled[h.id].orEmpty().toSortedSet(), insts[h.id].orEmpty(), h.createdAt, h.updatedAt)
+        }
+    }
+
+    override fun list(): List<MenuGroupView> = load("", pp())
+
+    override fun find(id: UUID): MenuGroupView? = load("where id = :id", pp("id" to id)).firstOrNull()
+
+    override fun existsByName(name: String, exceptId: UUID?): Boolean =
+        named.queryForObject(
+            "select exists(select 1 from menu_group where lower(name) = lower(:n) and (cast(:ex as uuid) is null or id <> cast(:ex as uuid)))",
+            pp("n" to name, "ex" to exceptId), Boolean::class.java,
+        ) ?: false
+
+    override fun save(id: UUID, name: String, description: String?, disabledMenus: Set<String>, now: Instant) {
+        named.update(
+            """insert into menu_group (id, name, description, created_at, updated_at) values (:id, :n, :d, :now, :now)
+               on conflict (id) do update set name = excluded.name, description = excluded.description, updated_at = excluded.updated_at""",
+            pp("id" to id, "n" to name, "d" to description, "now" to pts(now)),
+        )
+        named.update("delete from menu_group_disabled_menu where menu_group_id = :id", pp("id" to id))
+        disabledMenus.forEach { key ->
+            named.update("insert into menu_group_disabled_menu (menu_group_id, menu_key) values (:id, :k)", pp("id" to id, "k" to key))
+        }
+    }
+
+    override fun delete(id: UUID) {
+        named.update("delete from menu_group where id = :id", pp("id" to id))
+    }
+
+    override fun replaceInstitutions(groupId: UUID, institutionIds: Set<UUID>, now: Instant) {
+        named.update("delete from institution_menu_group where menu_group_id = :g", pp("g" to groupId))
+        institutionIds.forEach { assign(it, groupId, now) }
+    }
+
+    override fun assign(institutionId: UUID, groupId: UUID?, now: Instant) {
+        if (groupId == null) {
+            named.update("delete from institution_menu_group where institution_id = :i", pp("i" to institutionId))
+            return
+        }
+        named.update(
+            """insert into institution_menu_group (institution_id, menu_group_id, assigned_at) values (:i, :g, :now)
+               on conflict (institution_id) do update set menu_group_id = excluded.menu_group_id, assigned_at = excluded.assigned_at""",
+            pp("i" to institutionId, "g" to groupId, "now" to pts(now)),
+        )
+    }
+
+    override fun findByInstitution(institutionId: UUID): MenuGroupView? {
+        val groupId = named.query("select menu_group_id from institution_menu_group where institution_id = :i", pp("i" to institutionId)) { rs, _ ->
+            rs.pid("menu_group_id")
+        }.firstOrNull() ?: return null
+        return find(groupId)
+    }
 }
 
 // ───────── SAAS-001 기관 ─────────
@@ -67,10 +162,12 @@ class PlatformInstitutionJdbcAdapter(jdbc: JdbcTemplate) : PlatformInstitutionPo
             select i.id, i.name, i.owner_name, i.type, i.service_status, i.status_reason, i.created_at,
                    s.plan_code, s.status as sub_status,
                    (select count(*) from student st where st.institution_id = i.id and st.status <> 'WITHDRAWN') as student_count,
-                   v.voucher_code
+                   v.voucher_code, mg.id as menu_group_id, mg.name as menu_group_name
               from institution i
               left join institution_subscription s on s.institution_id = i.id
               left join voucher_registration v on v.institution_id = i.id and v.status = 'ACTIVE'
+              left join institution_menu_group img on img.institution_id = i.id
+              left join menu_group mg on mg.id = img.menu_group_id
         """
         val MAPPER = RowMapper<PlatformInstitutionRow> { rs, _ ->
             PlatformInstitutionRow(
@@ -78,6 +175,7 @@ class PlatformInstitutionJdbcAdapter(jdbc: JdbcTemplate) : PlatformInstitutionPo
                 ServiceStatus.valueOf(rs.getString("service_status")), rs.getString("status_reason"),
                 rs.getString("plan_code"), rs.getString("sub_status"), rs.getInt("student_count"),
                 rs.getString("voucher_code"), rs.pts("created_at")!!,
+                rs.getObject("menu_group_id", UUID::class.java), rs.getString("menu_group_name"),
             )
         }
     }
