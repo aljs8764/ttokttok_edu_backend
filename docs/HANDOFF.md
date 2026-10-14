@@ -200,6 +200,7 @@
   - ① 토큰·테마 (웹 26ff092): `src/theme/tokens.ts`·`src/theme/index.ts`(기존 `src/app/theme.ts` 삭제), IBM Plex Sans KR·Mono 를 next/font/google 로(빌드 PC 인터넷 필요, Pretendard CDN 제거). 버튼 44/32, 카드 12px, 세그먼트 탭, 상태 배지 톤이 테마에서 전 화면에 적용됨
   - ② 공통 컴포넌트 (웹 81bd41e): `src/components/ui/*`(StatusBadge·MenuIdChip·SectionCard·KpiCard·SegmentTabs·ProgressBar·EmptyState), 상태→배지 톤 매핑 `src/theme/status.ts`, PageHeader 흰 바+브레드크럼, 메뉴 구성 `src/components/shell/nav.tsx`. 메뉴ID 칩은 `NEXT_PUBLIC_SHOW_MENU_IDS=false` 로 숨김
   - ③ 앱 셸 (웹 33ac150): `src/components/shell/Sidebar.tsx`(기관 #1B2559 / 운영사 #10163A), 기관 전환은 사이드바 '현재 기관' 버튼, 계정 메뉴는 하단 사용자 카드로 이동(로직 동일). 운영 콘솔 탭은 `/platform?tab=` 과 동기화돼 운영사 사이드바 메뉴가 됨. 로그인·초대 수락 = `AuthLayout`, 온보딩은 셸 없이(셸이 `/onboarding` 경로로 판단). md 미만은 상단 바 + Drawer
+  - ④ Phase 1 화면 (웹 cd895b6·3a6c466): 대시보드(인사 줄·KPI 카드·LIVE 타임라인·세그먼트 탭, 역할별 구조·위젯 설정 유지), 원생 목록(한 카드: 상태 세그먼트·검색·아바타·배지), 데일리 리포트, 알림장·행사 목록, 설정 탭을 화면 머리로. 전 화면 공통: 카드 패딩 20×24, 표 첫·끝 칸 24px(테마), 색 있는 칩 = 배지 톤, 글자 상태색은 *.dark(대비 4.5:1)
 
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
