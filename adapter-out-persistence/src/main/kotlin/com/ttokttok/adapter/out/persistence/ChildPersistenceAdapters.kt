@@ -4,16 +4,22 @@ import com.ttokttok.application.port.out.ChildPort
 import com.ttokttok.domain.child.Child
 import com.ttokttok.domain.child.ChildId
 import com.ttokttok.domain.common.UserId
+import jakarta.persistence.EntityManager
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDate
 import java.util.UUID
 
 // 다기관 아이 (스펙 7-8) — V9 테이블, JDBC. 생년월일은 원생과 같은 키로 암호화
 
 @Component
-class ChildJdbcAdapter(private val jdbc: JdbcTemplate, private val crypto: FieldCrypto) : ChildPort {
+class ChildJdbcAdapter(
+    private val jdbc: JdbcTemplate,
+    private val crypto: FieldCrypto,
+    private val em: EntityManager,
+) : ChildPort {
     private val mapper = RowMapper { rs, _ ->
         Child(
             ChildId(rs.getObject("id", UUID::class.java)),
@@ -48,6 +54,8 @@ class ChildJdbcAdapter(private val jdbc: JdbcTemplate, private val crypto: Field
     }
 
     override fun addGuardian(childId: ChildId, userId: UserId) {
+        // 같은 트랜잭션에서 JPA 로 막 저장한 app_user 가 아직 flush 전이면 FK(child_guardian.user_id) 위반 → 먼저 내보낸다
+        if (TransactionSynchronizationManager.isActualTransactionActive()) em.flush()
         jdbc.update("insert into child_guardian (child_id, user_id) values (?, ?) on conflict do nothing", childId.value, userId.value)
     }
 
