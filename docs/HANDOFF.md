@@ -197,6 +197,8 @@
   - 교사 하단 탭은 디자인(내 반·출결·알림장·원생 4개)이 아니라 기존 5개(내 반·알림장·행사·메시지·신청) 유지 — 원생 상세(STU-009) 화면이 앱에 없음
   - 남은 것: P2·P3 화면(채팅·앨범·설문·청구·커뮤니티 등)은 테마 색·모서리만 따라감 — 화면별 레이아웃은 미적용. 빌드 검증 안 함(위젯 상수·const 오류 가능)
 
+- 관리자 웹 UI/UX 디자인 적용 (2026-10-14~, 브랜치 claude/great-maxwell-6rrhge): 기준 = 디자인 캔버스 「똑똑에듀 어드민 UI」(35화면 + 사이드바 2종). 디자인만 바꾸고 API·쿼리 키·권한·실시간·라우트는 그대로. 계획·매핑·디자인 차이 표 = 웹 `docs/design-apply-plan.md`
+  - ① 토큰·테마 (웹 26ff092): `src/theme/tokens.ts`·`src/theme/index.ts`(기존 `src/app/theme.ts` 삭제), IBM Plex Sans KR·Mono 를 next/font/google 로(빌드 PC 인터넷 필요, Pretendard CDN 제거). 버튼 44/32, 카드 12px, 세그먼트 탭, 상태 배지 톤이 테마에서 전 화면에 적용됨
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인
 - 앱: Firebase 프로젝트 연결·실기기 푸시 확인, 교사앱 알림장·행사 실기기 확인(카메라·앨범 권한, S3 업로드는 버킷 CORS·localstack 필요), 오프라인 큐 실기기 확인(비행기 모드로 등·하원 → 복구 후 자동 전송), PDF 첨부 열기 실기기 확인, 네이티브 flavor(학생앱 별도 스토어 앱)
