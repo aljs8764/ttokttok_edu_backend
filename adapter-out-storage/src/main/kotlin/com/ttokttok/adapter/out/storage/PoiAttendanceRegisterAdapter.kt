@@ -8,7 +8,7 @@ import org.apache.poi.poifs.crypt.EncryptionInfo
 import org.apache.poi.poifs.crypt.EncryptionMode
 import org.apache.poi.poifs.filesystem.POIFSFileSystem
 import org.apache.poi.ss.usermodel.BorderStyle
-import org.apache.poi.ss.usermodel.CellStyle
+import org.apache.poi.xssf.usermodel.XSSFCellStyle
 import org.apache.poi.ss.usermodel.FillPatternType
 import org.apache.poi.ss.usermodel.HorizontalAlignment
 import org.apache.poi.ss.usermodel.IndexedColors
@@ -45,7 +45,7 @@ class PoiAttendanceRegisterAdapter : AttendanceRegisterPort {
         val sheet = wb.createSheet("${reg.month.monthValue}월 출석부")
         val dates = (1..reg.month.lengthOfMonth()).map { reg.month.atDay(it) }
 
-        fun style(block: CellStyle.() -> Unit): CellStyle = wb.createCellStyle().apply {
+        fun style(block: XSSFCellStyle.() -> Unit): XSSFCellStyle = wb.createCellStyle().apply {
             setBorderTop(BorderStyle.THIN); setBorderBottom(BorderStyle.THIN)
             setBorderLeft(BorderStyle.THIN); setBorderRight(BorderStyle.THIN)
             setVerticalAlignment(VerticalAlignment.CENTER)

@@ -6,6 +6,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("org.springframework.boot:spring-boot-starter-websocket")
+    implementation("org.springframework:spring-tx") // ErrorHandler 의 DataIntegrityViolationException
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
 }
