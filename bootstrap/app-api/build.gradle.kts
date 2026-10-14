@@ -17,4 +17,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.4.0")
+    // 어댑터 모듈이 implementation 으로 가진 것이라 테스트 컴파일 경로에는 따로 필요 (JdbcTemplate, MockHttpServletResponse 상위 타입)
+    testImplementation("org.springframework:spring-jdbc")
+    testImplementation("jakarta.servlet:jakarta.servlet-api")
 }
