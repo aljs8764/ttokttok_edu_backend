@@ -87,8 +87,8 @@ object ShuttleEta {
         }
         val v = speed(trip.lastSpeed)
         var seconds = 0.0
-        var prevLat = lat
-        var prevLng = lng
+        var prevLat: Double = lat
+        var prevLng: Double = lng
         var first = true
         return sorted.map { s ->
             if (s.seq < trip.nextSeq) {
