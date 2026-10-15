@@ -21,6 +21,10 @@ import java.util.UUID
 
 interface PlatformAdminPort {
     fun isAdmin(userId: UserId): Boolean
+    /** 운영사 계정이 하나라도 있는지 (기동 시 초기 계정 생성 판단) */
+    fun hasAny(): Boolean
+    /** 운영사로 지정. 이미 지정돼 있으면 아무 일도 하지 않는다 */
+    fun grant(userId: UserId)
 }
 
 /** 기관 서비스 상태. AccessGuard 가 정지·승인 대기 기관의 업무 API 를 막는 데 쓴다 */

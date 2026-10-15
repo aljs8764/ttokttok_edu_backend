@@ -8,5 +8,8 @@ ttok:
     enabled: false
   push:
     mode: log
+  platform:
+    bootstrap-admin:
+      enabled: false   # 통합 테스트 데이터에 운영사 계정을 섞지 않는다
   rate-limit:
     auth-per-minute: 10000   # 테스트는 같은 IP 로 로그인을 반복한다

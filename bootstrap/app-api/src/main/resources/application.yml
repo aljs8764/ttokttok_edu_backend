@@ -64,6 +64,14 @@ ttok:
   # SAAS-001 새 기관을 운영사 승인 후에 쓰게 할지 (기본: 가입 즉시 이용)
   platform:
     require-approval: ${REQUIRE_INSTITUTION_APPROVAL:false}
+    # 기동 시 운영사(슈퍼관리자) 계정이 하나도 없으면 아래 계정을 만들어 운영사로 지정한다.
+    # 로컬 기본값은 개발 전용 — 운영은 PLATFORM_ADMIN_PASSWORD 를 반드시 주입하거나 enabled=false
+    bootstrap-admin:
+      enabled: ${PLATFORM_ADMIN_BOOTSTRAP:true}
+      email: ${PLATFORM_ADMIN_EMAIL:admin@ttokttok.com}
+      password: ${PLATFORM_ADMIN_PASSWORD:Admin1234!}
+      name: ${PLATFORM_ADMIN_NAME:운영관리자}
+      institution-name: ${PLATFORM_ADMIN_INSTITUTION:똑똑 운영사}
   # AUTH-006 소셜 로그인 — 카카오·네이버 개발자센터에 앱 등록 후 켠다
   social:
     kakao:

@@ -52,6 +52,13 @@ class PlatformAdminJdbcAdapter(jdbc: JdbcTemplate) : PlatformAdminPort, Institut
     override fun isAdmin(userId: UserId): Boolean =
         named.queryForObject("select exists(select 1 from platform_admin where user_id = :u)", pp("u" to userId.value), Boolean::class.java) ?: false
 
+    override fun hasAny(): Boolean =
+        named.queryForObject("select exists(select 1 from platform_admin)", pp(), Boolean::class.java) ?: false
+
+    override fun grant(userId: UserId) {
+        named.update("insert into platform_admin (user_id) values (:u) on conflict (user_id) do nothing", pp("u" to userId.value))
+    }
+
     override fun status(institutionId: InstitutionId): ServiceStatus =
         named.query("select service_status from institution where id = :i", pp("i" to institutionId.value), RowMapper { rs, _ -> ServiceStatus.valueOf(rs.getString(1)) })
             .firstOrNull() ?: ServiceStatus.ACTIVE
