@@ -11,7 +11,7 @@ data class AlbumRow(
     val authorId: UUID, val authorName: String, val createdAt: Instant, val itemCount: Int, val recipients: Int,
 )
 
-/** NTC-011 저장소 (JDBC) */
+/** NTC-011 저장소 (JPA) */
 interface AlbumPort {
     fun insert(institutionId: InstitutionId, author: UserId, title: String, description: String?, now: Instant, files: List<FileId>, studentIds: Collection<UUID>): UUID
     fun find(id: UUID): AlbumRow?

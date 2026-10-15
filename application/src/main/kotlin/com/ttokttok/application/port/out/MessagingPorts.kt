@@ -33,7 +33,7 @@ data class MessageRow(
     val createdAt: Instant,
 )
 
-/** 대화·메시지 저장소 (NTC-007·008). JDBC 로 직접 구현 */
+/** 대화·메시지 저장소 (NTC-007·008). JPA 로 구현 */
 interface MessagingPort {
     /** (아이, 보호자, 알림장) 대화를 찾고 없으면 만든다. */
     fun findOrCreate(institutionId: InstitutionId, studentId: UUID, guardianUserId: UserId, noticeId: UUID?, now: Instant): ConversationRow

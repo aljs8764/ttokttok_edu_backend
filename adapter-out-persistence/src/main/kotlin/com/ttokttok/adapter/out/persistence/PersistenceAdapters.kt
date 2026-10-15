@@ -87,12 +87,20 @@ internal fun Int.toDays(): Set<DayOfWeek> = DayOfWeek.entries.filter { this and 
 @Component
 class InstitutionPersistenceAdapter(private val repo: InstitutionJpaRepository) : InstitutionPort {
     override fun save(institution: Institution): Institution {
-        repo.save(
-            InstitutionEntity(
-                institution.id.value, institution.name, institution.ownerName, institution.lateThresholdMinutes, institution.earlyLeaveThresholdMinutes,
-                institution.address, institution.phone, institution.logoFileId?.value, institution.sealFileId?.value, institution.type.name,
-            ),
-        )
+        // 서비스 상태·세션 정책·샘플 여부 등 도메인 밖에서 관리하는 컬럼은 기존 값을 유지한다
+        val e = repo.findByIdOrNull(institution.id.value)
+            ?: InstitutionEntity(institution.id.value, institution.name, institution.ownerName, institution.lateThresholdMinutes, institution.earlyLeaveThresholdMinutes)
+        e.name = institution.name
+        e.ownerName = institution.ownerName
+        e.lateThresholdMinutes = institution.lateThresholdMinutes
+        e.earlyLeaveThresholdMinutes = institution.earlyLeaveThresholdMinutes
+        e.address = institution.address
+        e.phone = institution.phone
+        e.logoFileId = institution.logoFileId?.value
+        e.sealFileId = institution.sealFileId?.value
+        e.type = institution.type.name
+        e.updatedAt = Instant.now()
+        repo.save(e)
         return institution
     }
     override fun findById(id: InstitutionId) = repo.findByIdOrNull(id.value)?.toDomain()
@@ -107,13 +115,19 @@ class InstitutionPersistenceAdapter(private val repo: InstitutionJpaRepository) 
 @Component
 class UserPersistenceAdapter(private val repo: UserJpaRepository, private val crypto: FieldCrypto) : UserPort {
     override fun save(user: User): User {
-        repo.save(
-            UserEntity(
-                user.id.value, user.name, user.email,
-                user.phone?.let { crypto.encrypt(it.digits) }, user.phone?.let { crypto.hash(it.digits) },
-                user.passwordHash, user.mustChangePassword,
-            ),
-        )
+        // 표시 언어(locale)는 도메인 밖에서 관리 → 기존 값 유지
+        val phoneEnc = user.phone?.let { crypto.encrypt(it.digits) }
+        val phoneHash = user.phone?.let { crypto.hash(it.digits) }
+        val e = repo.findByIdOrNull(user.id.value)
+            ?: UserEntity(user.id.value, user.name, user.email, phoneEnc, phoneHash, user.passwordHash, user.mustChangePassword)
+        e.name = user.name
+        e.email = user.email
+        e.phoneEnc = phoneEnc
+        e.phoneHash = phoneHash
+        e.passwordHash = user.passwordHash
+        e.mustChangePassword = user.mustChangePassword
+        e.updatedAt = Instant.now()
+        repo.save(e)
         return user
     }
     override fun findById(id: UserId) = repo.findByIdOrNull(id.value)?.toDomain()

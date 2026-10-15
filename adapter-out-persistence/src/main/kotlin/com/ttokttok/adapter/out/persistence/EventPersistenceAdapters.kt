@@ -2,8 +2,11 @@ package com.ttokttok.adapter.out.persistence
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.ttokttok.adapter.out.persistence.entity.EventResponseEntity
 import com.ttokttok.adapter.out.persistence.entity.SchoolEventEntity
+import com.ttokttok.adapter.out.persistence.repository.EventResponseJpaRepository
 import com.ttokttok.adapter.out.persistence.repository.SchoolEventJpaRepository
+import com.ttokttok.adapter.out.persistence.repository.SchoolEventTargetJpaRepository
 import com.ttokttok.application.port.out.EventTargetPort
 import com.ttokttok.application.port.out.PageResult
 import com.ttokttok.application.port.out.RsvpResponsePort
@@ -20,12 +23,7 @@ import com.ttokttok.domain.event.SchoolEventStatus
 import com.ttokttok.domain.notice.NoticeTarget
 import com.ttokttok.domain.notice.TargetScope
 import org.springframework.data.domain.PageRequest
-import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.jdbc.core.RowMapper
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Component
-import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 
@@ -76,71 +74,57 @@ class SchoolEventPersistenceAdapter(private val repo: SchoolEventJpaRepository) 
 }
 
 @Component
-class EventTargetJdbcAdapter(jdbc: JdbcTemplate) : EventTargetPort {
-    private val plain = jdbc
-    private val named = NamedParameterJdbcTemplate(jdbc)
+class EventTargetJpaAdapter(
+    private val targets: SchoolEventTargetJpaRepository,
+    private val q: JpaQueries,
+) : EventTargetPort {
 
     override fun saveTargets(eventId: SchoolEventId, studentIds: Collection<StudentId>) {
-        studentIds.distinct().chunked(500).forEach { chunk ->
-            plain.batchUpdate(
-                "insert into school_event_target (event_id, student_id) values (?, ?) on conflict do nothing",
-                chunk.map { arrayOf<Any>(eventId.value, it.value) },
-            )
-        }
+        q.insertValues(
+            "insert into school_event_target (event_id, student_id)",
+            studentIds.distinct().map { listOf(eventId.value, it.value) },
+            "on conflict do nothing",
+        )
     }
 
-    override fun findTargetStudents(eventId: SchoolEventId): List<StudentId> =
-        plain.query("select student_id from school_event_target where event_id = ?", { rs, _ -> StudentId(rs.getObject(1, UUID::class.java)) }, eventId.value)
+    override fun findTargetStudents(eventId: SchoolEventId): List<StudentId> = targets.findByEventId(eventId.value).map { StudentId(it.studentId) }
 
     override fun findEventIdsForStudents(studentIds: Collection<StudentId>, startsFrom: Instant?, limit: Int): List<SchoolEventId> {
         if (studentIds.isEmpty()) return emptyList()
-        val params = MapSqlParameterSource().addValue("ids", studentIds.map { it.value }).addValue("limit", limit)
+        val p = params("ids" to studentIds.map { it.value })
         val from = if (startsFrom == null) "" else {
-            params.addValue("from", Timestamp.from(startsFrom))
-            " and e.starts_at >= :from"
+            p["from"] = startsFrom
+            " and e.startsAt >= :from"
         }
-        return named.query(
-            """select e.id from school_event e
-               where exists (select 1 from school_event_target t where t.event_id = e.id and t.student_id in (:ids))$from
-               order by e.starts_at ${if (startsFrom == null) "desc" else "asc"} limit :limit""",
-            params,
-        ) { rs, _ -> SchoolEventId(rs.getObject("id", UUID::class.java)) }
+        return q.jpql(
+            """select e.id from SchoolEventEntity e
+               where exists (select 1 from SchoolEventTargetEntity t where t.eventId = e.id and t.studentId in (:ids))$from
+               order by e.startsAt ${if (startsFrom == null) "desc" else "asc"}""",
+            UUID::class.java, p, limit = limit,
+        ).map(::SchoolEventId)
     }
 }
 
 @Component
-class RsvpResponseJdbcAdapter(jdbc: JdbcTemplate) : RsvpResponsePort {
-    private val plain = jdbc
-    private val named = NamedParameterJdbcTemplate(jdbc)
+class RsvpResponseJpaAdapter(private val repo: EventResponseJpaRepository) : RsvpResponsePort {
 
-    private val mapper = RowMapper { rs, _ ->
-        RsvpResponse(
-            eventId = SchoolEventId(rs.getObject("event_id", UUID::class.java)),
-            studentId = StudentId(rs.getObject("student_id", UUID::class.java)),
-            answer = RsvpAnswer.valueOf(rs.getString("answer")),
-            reason = rs.getString("reason"),
-            respondedBy = UserId(rs.getObject("responded_by", UUID::class.java)),
-            respondedAt = rs.getTimestamp("responded_at").toInstant(),
-        )
-    }
+    private fun EventResponseEntity.toDomain() = RsvpResponse(
+        eventId = SchoolEventId(eventId), studentId = StudentId(studentId), answer = RsvpAnswer.valueOf(answer),
+        reason = reason, respondedBy = UserId(respondedBy), respondedAt = respondedAt,
+    )
 
+    /** (행사, 학생) 키로 덮어쓴다 */
     override fun upsert(response: RsvpResponse) {
-        plain.update(
-            """insert into event_response (event_id, student_id, answer, reason, responded_by, responded_at)
-               values (?, ?, ?, ?, ?, ?)
-               on conflict (event_id, student_id) do update set
-                   answer = excluded.answer, reason = excluded.reason,
-                   responded_by = excluded.responded_by, responded_at = excluded.responded_at""",
-            response.eventId.value, response.studentId.value, response.answer.name, response.reason,
-            response.respondedBy.value, Timestamp.from(response.respondedAt),
+        repo.save(
+            EventResponseEntity(
+                response.eventId.value, response.studentId.value, response.answer.name, response.reason,
+                response.respondedBy.value, response.respondedAt,
+            ),
         )
     }
 
-    override fun findByEvent(eventId: SchoolEventId): List<RsvpResponse> =
-        plain.query("select * from event_response where event_id = ?", mapper, eventId.value)
+    override fun findByEvent(eventId: SchoolEventId): List<RsvpResponse> = repo.findByEventId(eventId.value).map { it.toDomain() }
 
     override fun findByEvents(eventIds: Collection<SchoolEventId>): List<RsvpResponse> =
-        eventIds.map { it.value }.distinct().chunked(1000).flatMap { ids ->
-            named.query("select * from event_response where event_id in (:ids)", MapSqlParameterSource("ids", ids), mapper)
-        }
+        eventIds.map { it.value }.distinct().chunked(1000).flatMap { repo.findByEventIdIn(it) }.map { it.toDomain() }
 }

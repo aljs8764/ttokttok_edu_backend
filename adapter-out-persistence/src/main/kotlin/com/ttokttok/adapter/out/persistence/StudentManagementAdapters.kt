@@ -108,7 +108,7 @@ class ImportJobAdapter(private val repo: StudentImportJobJpaRepository, private 
 
     override fun save(job: ImportJob): ImportJob {
         val body = Body(
-            job.candidates.map { Row(it.rowNumber, it.name, it.birthDate, it.classroomName, it.guardianPhone.digits, it.relation, it.grade, it.memo) },
+            job.candidates.map { CandidateRow(it.rowNumber, it.name, it.birthDate, it.classroomName, it.guardianPhone.digits, it.relation, it.grade, it.memo) },
             job.errors.map { Err(it.rowNumber, it.column, it.message) },
         )
         repo.save(
@@ -130,8 +130,8 @@ class ImportJobAdapter(private val repo: StudentImportJobJpaRepository, private 
         )
     }
 
-    data class Body(val rows: List<Row>, val errors: List<Err>)
-    data class Row(
+    data class Body(val rows: List<CandidateRow>, val errors: List<Err>)
+    data class CandidateRow(
         val rowNumber: Int, val name: String, val birthDate: LocalDate, val classroomName: String,
         val phone: String, val relation: String?, val grade: String?, val memo: String?,
     )

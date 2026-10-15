@@ -1,4 +1,4 @@
-# 똑똑 백엔드·관리자 웹·앱 — 인계 메모 (2026-10-12)
+# 똑똑 백엔드·관리자 웹·앱 — 인계 메모 (2026-10-15)
 
 > **기준 문서는 백엔드 저장소의 `docs/HANDOFF.md`** (2026-10-07 결정). claude.ai 프로젝트의 `claude/backend/HANDOFF.md` 는 이 날짜 시점의 사본이라 이후 갱신되지 않는다. 진행 상황 갱신은 저장소 쪽에만 한다.
 
@@ -205,6 +205,16 @@
   - ⑥ Phase 3·마무리 (웹 2c5f7fe·3058e96): 익명 커뮤니티(디자인 없음)를 토큰·공통 컴포넌트로 같은 톤, 교사 업무 리포트 SectionCard, 인쇄·셔틀 지도·QR·로그인 패널 하드코딩 색 → 토큰. 미구현(AD-001~005, EVT-007·008, PAY-004·005, NTC-012)은 화면 만들지 않음. 새 의존성 없음(차트는 기존 SVG, 서체는 next/font). 빌드 미검증 — 사용자 PC 에서 `npm install && npm run build`, 확인 경로는 웹 `docs/design-apply-plan.md` 5절
   - ⑦ P2 화면별 배치 (웹 f85d3ef, PR #4): 앨범(목록 + 사진 그리드), 시간표(30분 칸 주간 그리드), 교사 근태(오늘 카드 + 근무일 칸), 행사 달력(머리 월 이동·오늘 강조), 설문(카드 목록·결과 타일). 카드 제목 17px 통일. 셔틀·구독/알림/보안 설정·교재·환불/할인 다이얼로그는 아직 테마만
 - 백엔드 CI 컴파일 오류 수정 (2026-10-14, 브랜치 claude/great-maxwell-6rrhge, PR #5): main 의 `./gradlew build` 가 run 7~13 내내 컴파일에서 실패하던 것. application(NoticeServices 스마트 캐스트, ShuttleServices Double?), adapter-out-storage(POI XSSFCellStyle), adapter-in-web(when 에 STUDENT_APP 분기, spring-tx 의존성). 동작 변화 없음
+- 영속 계층 JPA 전면 전환 (2026-10-15, 커밋 전 — 사용자가 jslim 으로 커밋): `adapter-out-persistence` 의 JdbcTemplate 어댑터 25개 파일을 모두 JPA 로 바꿈. 포트·서비스·API·마이그레이션은 그대로(포트 주석의 "JDBC" 문구만 수정)
+  - 구성: V1~V27 의 모든 테이블(105개 중 shedlock 제외 104개)을 엔티티로 매핑(`entity/*Entities.kt`, 연관관계 없이 id 컬럼 그대로 — 기존 엔티티 스타일), 복합 키는 `@IdClass`(키 클래스는 기본값 있는 data class). Repository 는 `repository/*Repositories.kt`(파생 쿼리 + JPQL `@Query`, on conflict upsert 만 네이티브 `@Query`). 어댑터 파일 이름은 `*JpaAdapter(s).kt`, 클래스는 `*JpaAdapter`
+  - `JpaSupport.kt` 의 `JpaQueries`(EntityManager): 조건이 붙었다 빠지는 동적 조회는 JPQL 문자열로, PostgreSQL 전용 집계(역할별 대시보드·통계·업무 분석·데이터 내보내기·미납 리마인드·사용량 등 filter·lateral·with·string_agg·at time zone)는 네이티브 쿼리로 실행하고 결과를 `Row`(컬럼 별칭으로 읽기, timestamptz 등 반환 타입 차이 흡수)로 읽음. 쿼리에 없는 파라미터는 자동으로 빼고 바인딩, 네이티브에서 null 이 들어갈 수 있는 값은 `typed(value)`(PostgreSQL 이 null 타입을 못 정하는 문제)
+  - 일괄 update/delete(`@Modifying`, `JpaQueries.update/jpqlUpdate/insertValues`)는 실행 전 flush·실행 후 clear — 같은 트랜잭션에서 다시 읽을 때 옛 엔티티 상태가 안 보이게(JDBC 때와 같은 동작). `@Modifying` 메서드에는 `@Transactional` 을 붙여 트랜잭션 밖 호출도 동작
+  - 기존 엔티티에 컬럼 추가: `InstitutionEntity`(created_at·updated_at·service_status·status_reason·status_changed_at·session_idle_minutes·is_sample·missing_alert_*), `UserEntity`(locale·created_at·updated_at), `StudentEntity.createdAt`(읽기 전용). 그래서 `InstitutionPersistenceAdapter.save`·`UserPersistenceAdapter.save` 는 새 엔티티로 덮어쓰지 않고 기존 행을 읽어 도메인 필드만 바꿔 저장하도록 바뀜(서비스 상태·세션 정책·샘플 여부·표시 언어가 지워지지 않게)
+  - `classroom_teacher` 는 쓰기 = `ClassroomEntity.teacherIds`(ElementCollection), JPQL 조건용 읽기 전용 `ClassroomTeacherEntity`(@Immutable, 컬럼명 명시) 를 같이 둠
+  - 서울 벽시계 비교(`(date + start_time) <= 지금`)는 LocalDateTime 바인딩 시 `hibernate.jdbc.time_zone=UTC` 변환으로 밀리므로 문자열 + `cast(:local_now as timestamp)` 로 넘김(RoleDashboard)
+  - 그대로 둔 JDBC: ShedLock 의 `JdbcTemplateLockProvider`(라이브러리 내부 잠금 테이블, `usingDbTime`), 통합 테스트의 검증용 `JdbcTemplate`
+  - 동작 차이(작음): 일부 "on conflict do update" 저장은 엔티티 merge(조회 후 insert/update)로 바뀜(동시 첫 저장이 겹치면 유니크 위반 가능), 상담 슬롯·결석 신청·커뮤니티 신고의 중복은 예외 대신 on conflict do nothing 으로 null 반환, 셔틀 운행 시작은 saveAndFlush 로 중복 운행을 즉시 감지
+  - 컴파일·테스트·기동 미검증(사용자 결정). 첫 빌드·기동 때 확인할 것: `ddl-auto: validate` 스키마 검증(엔티티 104개), Repository JPQL 파싱(기동 시), 네이티브 결과 타입(`Row` 변환)
 
 ## 남은 일
 - 사용자 PC 에서: 관리자 웹 `npm install`·`npm run build`, 앱 `flutter pub get`(pubspec.lock 커밋)·세 flavor 실행 확인, 백엔드 빌드·V8 마이그레이션 적용 확인

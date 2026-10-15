@@ -1,6 +1,9 @@
 package com.ttokttok.adapter.out.persistence.repository
 
+import com.ttokttok.adapter.out.persistence.entity.EventResponseEntity
+import com.ttokttok.adapter.out.persistence.entity.EventStudentKey
 import com.ttokttok.adapter.out.persistence.entity.SchoolEventEntity
+import com.ttokttok.adapter.out.persistence.entity.SchoolEventTargetEntity
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
@@ -10,6 +13,8 @@ import java.time.Instant
 import java.util.UUID
 
 interface SchoolEventJpaRepository : JpaRepository<SchoolEventEntity, UUID> {
+    fun findByInstitutionIdAndStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(institutionId: UUID, from: Instant, to: Instant): List<SchoolEventEntity>
+
     fun findByIdAndInstitutionId(id: UUID, institutionId: UUID): SchoolEventEntity?
 
     @Query(value = "select * from school_event where id = :id and institution_id = :institutionId for update", nativeQuery = true)
@@ -41,4 +46,13 @@ interface SchoolEventJpaRepository : JpaRepository<SchoolEventEntity, UUID> {
         nativeQuery = true,
     )
     fun lockReminderCandidates(@Param("now") now: Instant, @Param("limit") limit: Int): List<SchoolEventEntity>
+}
+
+interface SchoolEventTargetJpaRepository : JpaRepository<SchoolEventTargetEntity, EventStudentKey> {
+    fun findByEventId(eventId: UUID): List<SchoolEventTargetEntity>
+}
+
+interface EventResponseJpaRepository : JpaRepository<EventResponseEntity, EventStudentKey> {
+    fun findByEventId(eventId: UUID): List<EventResponseEntity>
+    fun findByEventIdIn(eventIds: Collection<UUID>): List<EventResponseEntity>
 }

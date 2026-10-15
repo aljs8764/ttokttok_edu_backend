@@ -3,7 +3,9 @@ package com.ttokttok.adapter.out.persistence
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.ttokttok.adapter.out.persistence.entity.NoticeEntity
+import com.ttokttok.adapter.out.persistence.entity.NoticeRecipientEntity
 import com.ttokttok.adapter.out.persistence.repository.NoticeJpaRepository
+import com.ttokttok.adapter.out.persistence.repository.NoticeRecipientJpaRepository
 import com.ttokttok.application.port.out.NoticePort
 import com.ttokttok.application.port.out.NoticeRecipientPort
 import com.ttokttok.application.port.out.NoticeSearchCriteria
@@ -21,12 +23,7 @@ import com.ttokttok.domain.notice.NoticeStatus
 import com.ttokttok.domain.notice.NoticeTarget
 import com.ttokttok.domain.notice.TargetScope
 import org.springframework.data.domain.PageRequest
-import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.jdbc.core.RowMapper
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Component
-import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 
@@ -83,102 +80,70 @@ class NoticePersistenceAdapter(private val repo: NoticeJpaRepository) : NoticePo
 }
 
 /**
- * 수신자 스냅샷. 한 번에 수백 행을 넣고 집계·부분 갱신이 많아 JdbcTemplate 으로 직접 다룬다.
- * 호출한 유스케이스 트랜잭션에 함께 묶인다.
+ * 수신자 스냅샷. 한 번에 수백 행을 넣으므로 쓰기는 여러 행을 한 문장으로(on conflict do nothing) 넣고,
+ * 부분 갱신은 JPQL 일괄 update 로 한다. 호출한 유스케이스 트랜잭션에 함께 묶인다.
  */
 @Component
-class NoticeRecipientJdbcAdapter(jdbc: JdbcTemplate) : NoticeRecipientPort {
-    private val plain = jdbc
-    private val named = NamedParameterJdbcTemplate(jdbc)
+class NoticeRecipientJpaAdapter(
+    private val repo: NoticeRecipientJpaRepository,
+    private val q: JpaQueries,
+) : NoticeRecipientPort {
 
-    private val mapper = RowMapper { rs, _ ->
-        NoticeRecipient(
-            noticeId = NoticeId(rs.getObject("notice_id", UUID::class.java)),
-            studentId = StudentId(rs.getObject("student_id", UUID::class.java)),
-            guardianUserId = rs.getObject("guardian_user_id", UUID::class.java)?.let { UserId(it) },
-            deliveredAt = rs.getTimestamp("delivered_at")?.toInstant(),
-            readAt = rs.getTimestamp("read_at")?.toInstant(),
-            resentCount = rs.getInt("resent_count"),
+    private fun NoticeRecipientEntity.toDomain() = NoticeRecipient(
+        noticeId = NoticeId(noticeId), studentId = StudentId(studentId), guardianUserId = guardianUserId?.let { UserId(it) },
+        deliveredAt = deliveredAt, readAt = readAt, resentCount = resentCount,
+    )
+
+    override fun saveAll(recipients: List<NoticeRecipient>) {
+        // 같은 (알림장, 학생, 보호자) 는 유니크 인덱스(ux_notice_recipient)로 한 번만
+        q.insertValues(
+            "insert into notice_recipient (notice_id, student_id, guardian_user_id, delivered_at, read_at, resent_count)",
+            recipients.map {
+                listOf(it.noticeId.value, it.studentId.value, typed(it.guardianUserId?.value), typed(it.deliveredAt), typed(it.readAt), it.resentCount)
+            },
+            "on conflict do nothing",
         )
     }
 
-    override fun saveAll(recipients: List<NoticeRecipient>) {
-        if (recipients.isEmpty()) return
-        recipients.chunked(500).forEach { chunk ->
-            plain.batchUpdate(
-                """insert into notice_recipient (notice_id, student_id, guardian_user_id, delivered_at, read_at, resent_count)
-                   values (?, ?, ?, ?, ?, ?) on conflict do nothing""",
-                chunk.map {
-                    arrayOf(
-                        it.noticeId.value, it.studentId.value, it.guardianUserId?.value,
-                        it.deliveredAt?.let(Timestamp::from), it.readAt?.let(Timestamp::from), it.resentCount,
-                    )
-                },
-            )
-        }
-    }
-
-    override fun findByNotice(noticeId: NoticeId): List<NoticeRecipient> =
-        plain.query("select * from notice_recipient where notice_id = ?", mapper, noticeId.value)
+    override fun findByNotice(noticeId: NoticeId): List<NoticeRecipient> = repo.findByNoticeId(noticeId.value).map { it.toDomain() }
 
     override fun findByNotices(noticeIds: Collection<NoticeId>): List<NoticeRecipient> =
-        noticeIds.map { it.value }.distinct().chunked(1000).flatMap { ids ->
-            named.query("select * from notice_recipient where notice_id in (:ids)", MapSqlParameterSource("ids", ids), mapper)
-        }
+        noticeIds.map { it.value }.distinct().chunked(1000).flatMap { repo.findByNoticeIdIn(it) }.map { it.toDomain() }
 
-    override fun markRead(noticeId: NoticeId, userId: UserId, at: Instant): Boolean =
-        plain.update(
-            "update notice_recipient set read_at = ? where notice_id = ? and guardian_user_id = ? and read_at is null",
-            Timestamp.from(at), noticeId.value, userId.value,
-        ) > 0
+    override fun markRead(noticeId: NoticeId, userId: UserId, at: Instant): Boolean = repo.markRead(noticeId.value, userId.value, at) > 0
 
     override fun markDelivered(noticeId: NoticeId, userIds: Collection<UserId>, at: Instant) {
         if (userIds.isEmpty()) return
-        userIds.map { it.value }.distinct().chunked(1000).forEach { ids ->
-            named.update(
-                """update notice_recipient set delivered_at = coalesce(delivered_at, :at)
-                   where notice_id = :noticeId and guardian_user_id in (:ids)""",
-                MapSqlParameterSource().addValue("at", Timestamp.from(at)).addValue("noticeId", noticeId.value).addValue("ids", ids),
-            )
-        }
+        userIds.map { it.value }.distinct().chunked(1000).forEach { repo.markDelivered(noticeId.value, it, at) }
     }
 
     override fun incrementResent(noticeId: NoticeId, studentIds: Collection<StudentId>) {
         if (studentIds.isEmpty()) return
-        studentIds.map { it.value }.distinct().chunked(1000).forEach { ids ->
-            named.update(
-                "update notice_recipient set resent_count = resent_count + 1 where notice_id = :noticeId and student_id in (:ids)",
-                MapSqlParameterSource().addValue("noticeId", noticeId.value).addValue("ids", ids),
-            )
-        }
+        studentIds.map { it.value }.distinct().chunked(1000).forEach { repo.incrementResent(noticeId.value, it) }
     }
 
     override fun findInboxNoticeIds(userId: UserId, studentIds: Collection<StudentId>?, before: Instant?, limit: Int): List<NoticeId> {
-        val params = MapSqlParameterSource().addValue("userId", userId.value).addValue("limit", limit)
+        val p = params("userId" to userId.value)
         val studentFilter = if (studentIds.isNullOrEmpty()) "" else {
-            params.addValue("studentIds", studentIds.map { it.value })
-            " and r.student_id in (:studentIds)"
+            p["studentIds"] = studentIds.map { it.value }
+            " and r.studentId in (:studentIds)"
         }
         val beforeFilter = if (before == null) "" else {
-            params.addValue("before", Timestamp.from(before))
-            " and n.sent_at < :before"
+            p["before"] = before
+            " and n.sentAt < :before"
         }
-        return named.query(
-            """select n.id from notice n
+        return q.jpql(
+            """select n.id from NoticeEntity n
                where n.status = 'SENT'$beforeFilter
-                 and exists (select 1 from notice_recipient r
-                             where r.notice_id = n.id and r.guardian_user_id = :userId$studentFilter)
-               order by n.sent_at desc limit :limit""",
-            params,
-        ) { rs, _ -> NoticeId(rs.getObject("id", UUID::class.java)) }
+                 and exists (select 1 from NoticeRecipientEntity r
+                             where r.noticeId = n.id and r.guardianUserId = :userId$studentFilter)
+               order by n.sentAt desc""",
+            UUID::class.java, p, limit = limit,
+        ).map(::NoticeId)
     }
 
     override fun findForUser(noticeIds: Collection<NoticeId>, userId: UserId): List<NoticeRecipient> {
         if (noticeIds.isEmpty()) return emptyList()
-        return named.query(
-            "select * from notice_recipient where notice_id in (:ids) and guardian_user_id = :userId",
-            MapSqlParameterSource().addValue("ids", noticeIds.map { it.value }).addValue("userId", userId.value),
-            mapper,
-        )
+        return repo.findByNoticeIdInAndGuardianUserId(noticeIds.map { it.value }, userId.value).map { it.toDomain() }
     }
 }

@@ -11,7 +11,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 
-/** 통계 원천 조회 (읽기 전용). 구현은 JDBC 집계 쿼리 */
+/** 통계 원천 조회 (읽기 전용). 구현은 JPA 네이티브 집계 쿼리 */
 interface StatsReadPort {
     /** 일별 출결 합계. 지난 날은 daily_attendance_stat, [today] 는 attendance_day 에서 바로 계산 */
     fun dailyAttendance(institutionId: InstitutionId, from: LocalDate, to: LocalDate, today: LocalDate, classroomId: ClassroomId?): List<DailyCounts>

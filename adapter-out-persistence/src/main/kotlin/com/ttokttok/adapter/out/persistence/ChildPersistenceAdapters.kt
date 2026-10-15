@@ -1,71 +1,62 @@
 package com.ttokttok.adapter.out.persistence
 
+import com.ttokttok.adapter.out.persistence.entity.ChildEntity
+import com.ttokttok.adapter.out.persistence.entity.ChildGuardianKey
+import com.ttokttok.adapter.out.persistence.repository.ChildGuardianJpaRepository
+import com.ttokttok.adapter.out.persistence.repository.ChildJpaRepository
 import com.ttokttok.application.port.out.ChildPort
 import com.ttokttok.domain.child.Child
 import com.ttokttok.domain.child.ChildId
 import com.ttokttok.domain.common.UserId
-import jakarta.persistence.EntityManager
-import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.jdbc.core.RowMapper
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
-import org.springframework.transaction.support.TransactionSynchronizationManager
+import java.time.Instant
 import java.time.LocalDate
-import java.util.UUID
 
-// 다기관 아이 (스펙 7-8) — V9 테이블, JDBC. 생년월일은 원생과 같은 키로 암호화
+// 다기관 아이 (스펙 7-8) — V9 테이블. 생년월일은 원생과 같은 키로 암호화
 
 @Component
-class ChildJdbcAdapter(
-    private val jdbc: JdbcTemplate,
+class ChildJpaAdapter(
+    private val children: ChildJpaRepository,
+    private val guardians: ChildGuardianJpaRepository,
     private val crypto: FieldCrypto,
-    private val em: EntityManager,
 ) : ChildPort {
-    private val mapper = RowMapper { rs, _ ->
-        Child(
-            ChildId(rs.getObject("id", UUID::class.java)),
-            rs.getString("name"),
-            rs.getString("birth_enc")?.let { LocalDate.parse(crypto.decrypt(it)) },
-        )
-    }
+
+    private fun ChildEntity.toDomain() = Child(ChildId(id), name, birthEnc?.let { LocalDate.parse(crypto.decrypt(it)) })
 
     override fun save(child: Child): Child {
-        jdbc.update(
-            """insert into child (id, name, birth_enc) values (?, ?, ?)
-               on conflict (id) do update set name = excluded.name, birth_enc = excluded.birth_enc, updated_at = now()""",
-            child.id.value, child.name, child.birthDate?.let { crypto.encrypt(it.toString()) },
-        )
+        val birthEnc = child.birthDate?.let { crypto.encrypt(it.toString()) }
+        val e = children.findByIdOrNull(child.id.value) ?: ChildEntity(child.id.value, child.name, birthEnc)
+        e.name = child.name
+        e.birthEnc = birthEnc
+        e.updatedAt = Instant.now()
+        children.save(e)
         return child
     }
 
-    override fun find(id: ChildId): Child? =
-        jdbc.query("select * from child where id = ?", mapper, id.value).firstOrNull()
+    override fun find(id: ChildId): Child? = children.findByIdOrNull(id.value)?.toDomain()
 
     override fun findAllByIds(ids: Collection<ChildId>): List<Child> {
         if (ids.isEmpty()) return emptyList()
-        return ids.map { it.value }.distinct().chunked(500).flatMap { chunk ->
-            val marks = chunk.joinToString(",") { "?" }
-            jdbc.query("select * from child where id in ($marks)", mapper, *chunk.toTypedArray())
-        }
+        return ids.map { it.value }.distinct().chunked(500).flatMap { children.findAllById(it) }.map { it.toDomain() }
     }
 
     override fun delete(id: ChildId) {
-        jdbc.update("delete from child_guardian where child_id = ?", id.value)
-        jdbc.update("delete from child where id = ?", id.value)
+        guardians.deleteByChild(id.value)
+        if (children.existsById(id.value)) children.deleteById(id.value)
     }
 
     override fun addGuardian(childId: ChildId, userId: UserId) {
-        // 같은 트랜잭션에서 JPA 로 막 저장한 app_user 가 아직 flush 전이면 FK(child_guardian.user_id) 위반 → 먼저 내보낸다
-        if (TransactionSynchronizationManager.isActualTransactionActive()) em.flush()
-        jdbc.update("insert into child_guardian (child_id, user_id) values (?, ?) on conflict do nothing", childId.value, userId.value)
+        // 네이티브 insert 전에 같은 트랜잭션에서 JPA 로 막 저장한 app_user·child 를 내보낸다 (@Modifying(flushAutomatically))
+        guardians.insertIfAbsent(childId.value, userId.value)
     }
 
     override fun removeGuardian(childId: ChildId, userId: UserId) {
-        jdbc.update("delete from child_guardian where child_id = ? and user_id = ?", childId.value, userId.value)
+        val key = ChildGuardianKey(childId.value, userId.value)
+        if (guardians.existsById(key)) guardians.deleteById(key)
     }
 
-    override fun guardianUserIds(childId: ChildId): List<UserId> =
-        jdbc.queryForList("select user_id from child_guardian where child_id = ?", UUID::class.java, childId.value).map(::UserId)
+    override fun guardianUserIds(childId: ChildId): List<UserId> = guardians.findByChildId(childId.value).map { UserId(it.userId) }
 
-    override fun findIdsByGuardian(userId: UserId): List<ChildId> =
-        jdbc.queryForList("select child_id from child_guardian where user_id = ?", UUID::class.java, userId.value).map(::ChildId)
+    override fun findIdsByGuardian(userId: UserId): List<ChildId> = guardians.findByUserId(userId.value).map { ChildId(it.childId) }
 }

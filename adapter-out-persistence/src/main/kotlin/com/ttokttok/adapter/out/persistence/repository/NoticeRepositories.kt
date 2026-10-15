@@ -1,11 +1,14 @@
 package com.ttokttok.adapter.out.persistence.repository
 
 import com.ttokttok.adapter.out.persistence.entity.NoticeEntity
+import com.ttokttok.adapter.out.persistence.entity.NoticeRecipientEntity
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.util.UUID
 
@@ -49,4 +52,26 @@ interface NoticeJpaRepository : JpaRepository<NoticeEntity, UUID> {
         @Param("institutionId") institutionId: UUID, @Param("from") from: Instant, @Param("to") to: Instant,
         @Param("authorId") authorId: UUID?,
     ): List<NoticeEntity>
+}
+
+interface NoticeRecipientJpaRepository : JpaRepository<NoticeRecipientEntity, Long> {
+    fun findByNoticeId(noticeId: UUID): List<NoticeRecipientEntity>
+    fun findByNoticeIdIn(noticeIds: Collection<UUID>): List<NoticeRecipientEntity>
+    fun findByNoticeIdInAndGuardianUserId(noticeIds: Collection<UUID>, guardianUserId: UUID): List<NoticeRecipientEntity>
+    fun existsByNoticeIdAndStudentIdAndGuardianUserId(noticeId: UUID, studentId: UUID, guardianUserId: UUID): Boolean
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update NoticeRecipientEntity r set r.readAt = :at where r.noticeId = :n and r.guardianUserId = :u and r.readAt is null")
+    fun markRead(@Param("n") noticeId: UUID, @Param("u") userId: UUID, @Param("at") at: Instant): Int
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update NoticeRecipientEntity r set r.deliveredAt = coalesce(r.deliveredAt, :at) where r.noticeId = :n and r.guardianUserId in (:ids)")
+    fun markDelivered(@Param("n") noticeId: UUID, @Param("ids") userIds: Collection<UUID>, @Param("at") at: Instant): Int
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update NoticeRecipientEntity r set r.resentCount = r.resentCount + 1 where r.noticeId = :n and r.studentId in (:ids)")
+    fun incrementResent(@Param("n") noticeId: UUID, @Param("ids") studentIds: Collection<UUID>): Int
 }

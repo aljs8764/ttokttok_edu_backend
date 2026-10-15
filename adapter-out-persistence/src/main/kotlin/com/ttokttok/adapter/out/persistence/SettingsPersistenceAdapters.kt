@@ -1,5 +1,15 @@
 package com.ttokttok.adapter.out.persistence
 
+import com.ttokttok.adapter.out.persistence.entity.LoginAttemptEntity
+import com.ttokttok.adapter.out.persistence.entity.RefreshTokenEntity
+import com.ttokttok.adapter.out.persistence.entity.StaffInvitationEntity
+import com.ttokttok.adapter.out.persistence.entity.StoredFileEntity
+import com.ttokttok.adapter.out.persistence.repository.LoginAttemptJpaRepository
+import com.ttokttok.adapter.out.persistence.repository.RefreshTokenJpaRepository
+import com.ttokttok.adapter.out.persistence.repository.StaffInvitationJpaRepository
+import com.ttokttok.adapter.out.persistence.repository.StoredFileJpaRepository
+import com.ttokttok.adapter.out.persistence.repository.TermsAgreementJpaRepository
+import com.ttokttok.adapter.out.persistence.repository.TermsJpaRepository
 import com.ttokttok.application.port.out.LoginAttemptPort
 import com.ttokttok.application.port.out.RefreshTokenPort
 import com.ttokttok.application.port.out.RefreshTokenRecord
@@ -20,171 +30,138 @@ import com.ttokttok.domain.terms.TermsId
 import com.ttokttok.domain.terms.TermsType
 import com.ttokttok.domain.user.LoginAttempt
 import com.ttokttok.domain.user.Role
-import jakarta.persistence.EntityManager
-import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.jdbc.core.RowMapper
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
-import org.springframework.transaction.support.TransactionSynchronizationManager
-import java.sql.ResultSet
-import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 
-private fun ResultSet.uuid(col: String): UUID = getObject(col, UUID::class.java)
-private fun ResultSet.uuidOrNull(col: String): UUID? = getObject(col, UUID::class.java)
-private fun ResultSet.instant(col: String): Instant = getTimestamp(col).toInstant()
-private fun ResultSet.instantOrNull(col: String): Instant? = getTimestamp(col)?.toInstant()
-private fun Instant?.ts(): Timestamp? = this?.let(Timestamp::from)
-
 @Component
-class StoredFileJdbcAdapter(jdbc: JdbcTemplate) : StoredFilePort {
-    private val plain = jdbc
-    private val named = NamedParameterJdbcTemplate(jdbc)
+class StoredFileJpaAdapter(private val repo: StoredFileJpaRepository) : StoredFilePort {
 
-    private val mapper = RowMapper { rs, _ ->
-        StoredFile(
-            id = FileId(rs.uuid("id")), institutionId = InstitutionId(rs.uuid("institution_id")),
-            uploaderId = UserId(rs.uuid("uploader_id")), purpose = FilePurpose.valueOf(rs.getString("purpose")),
-            originalName = rs.getString("original_name"), mime = rs.getString("mime"), size = rs.getLong("size"),
-            storageKey = rs.getString("storage_key"), status = FileStatus.valueOf(rs.getString("status")),
-            createdAt = rs.instant("created_at"),
-        )
-    }
+    private fun StoredFileEntity.toDomain() = StoredFile(
+        id = FileId(id), institutionId = InstitutionId(institutionId),
+        uploaderId = UserId(uploaderId), purpose = FilePurpose.valueOf(purpose),
+        originalName = originalName, mime = mime, size = size,
+        storageKey = storageKey, status = FileStatus.valueOf(status),
+        createdAt = createdAt,
+    )
 
+    /** 처음엔 넣고, 이후엔 상태만 바뀐다 (나머지 값은 같음) */
     override fun save(file: StoredFile): StoredFile {
-        plain.update(
-            """insert into stored_file (id, institution_id, uploader_id, purpose, original_name, mime, size, storage_key, status, created_at)
-               values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-               on conflict (id) do update set status = excluded.status""",
-            file.id.value, file.institutionId.value, file.uploaderId.value, file.purpose.name, file.originalName,
-            file.mime, file.size, file.storageKey, file.status.name, Timestamp.from(file.createdAt),
+        repo.save(
+            StoredFileEntity(
+                file.id.value, file.institutionId.value, file.uploaderId.value, file.purpose.name, file.originalName,
+                file.mime, file.size, file.storageKey, file.status.name, file.createdAt,
+            ),
         )
         return file
     }
 
-    override fun find(id: FileId): StoredFile? =
-        plain.query("select * from stored_file where id = ?", mapper, id.value).firstOrNull()
+    override fun find(id: FileId): StoredFile? = repo.findByIdOrNull(id.value)?.toDomain()
 
     override fun findAllByIds(ids: Collection<FileId>): List<StoredFile> =
-        ids.map { it.value }.distinct().chunked(1000).flatMap {
-            named.query("select * from stored_file where id in (:ids)", MapSqlParameterSource("ids", it), mapper)
-        }
+        ids.map { it.value }.distinct().chunked(1000).flatMap { repo.findAllById(it) }.map { it.toDomain() }
 
-    override fun findPendingBefore(before: Instant, limit: Int): List<StoredFile> =
-        plain.query(
-            "select * from stored_file where status = 'PENDING' and created_at < ? order by created_at limit ? for update skip locked",
-            mapper, Timestamp.from(before), limit,
-        )
+    override fun findPendingBefore(before: Instant, limit: Int): List<StoredFile> = repo.lockPendingBefore(before, limit).map { it.toDomain() }
 
     override fun delete(id: FileId) {
-        plain.update("delete from stored_file where id = ? and status = 'PENDING'", id.value)
+        repo.deletePending(id.value)
     }
 }
 
 @Component
-class LoginAttemptJdbcAdapter(private val jdbc: JdbcTemplate) : LoginAttemptPort {
+class LoginAttemptJpaAdapter(private val repo: LoginAttemptJpaRepository) : LoginAttemptPort {
     override fun find(userId: UserId): LoginAttempt? =
-        jdbc.query("select * from login_attempt where user_id = ?", { rs, _ ->
-            LoginAttempt(UserId(rs.uuid("user_id")), rs.getInt("failed_count"), rs.instantOrNull("locked_until"))
-        }, userId.value).firstOrNull()
+        repo.findByIdOrNull(userId.value)?.let { LoginAttempt(UserId(it.userId), it.failedCount, it.lockedUntil) }
 
     override fun save(attempt: LoginAttempt) {
-        jdbc.update(
-            """insert into login_attempt (user_id, failed_count, locked_until, updated_at) values (?, ?, ?, now())
-               on conflict (user_id) do update set failed_count = excluded.failed_count,
-                   locked_until = excluded.locked_until, updated_at = now()""",
-            attempt.userId.value, attempt.failedCount, attempt.lockedUntil.ts(),
-        )
+        repo.save(LoginAttemptEntity(attempt.userId.value, attempt.failedCount, attempt.lockedUntil, Instant.now()))
     }
 }
 
 @Component
-class RefreshTokenJdbcAdapter(private val jdbc: JdbcTemplate) : RefreshTokenPort {
-    private val mapper = RowMapper { rs, _ ->
-        RefreshTokenRecord(
-            jti = rs.uuid("jti"), familyId = rs.uuid("family_id"), userId = UserId(rs.uuid("user_id")),
-            rememberMe = rs.getBoolean("remember_me"), expiresAt = rs.instant("expires_at"),
-            revokedAt = rs.instantOrNull("revoked_at"), replacedBy = rs.uuidOrNull("replaced_by"),
-        )
-    }
+class RefreshTokenJpaAdapter(private val repo: RefreshTokenJpaRepository) : RefreshTokenPort {
+
+    private fun RefreshTokenEntity.toRecord() = RefreshTokenRecord(
+        jti = jti, familyId = familyId, userId = UserId(userId),
+        rememberMe = rememberMe, expiresAt = expiresAt,
+        revokedAt = revokedAt, replacedBy = replacedBy,
+    )
 
     override fun save(record: RefreshTokenRecord) {
-        jdbc.update(
-            "insert into refresh_token (jti, family_id, user_id, remember_me, expires_at) values (?, ?, ?, ?, ?)",
-            record.jti, record.familyId, record.userId.value, record.rememberMe, Timestamp.from(record.expiresAt),
-        )
+        repo.save(RefreshTokenEntity(record.jti, record.familyId, record.userId.value, record.rememberMe, record.expiresAt))
     }
 
-    override fun find(jti: UUID): RefreshTokenRecord? = jdbc.query("select * from refresh_token where jti = ?", mapper, jti).firstOrNull()
+    override fun find(jti: UUID): RefreshTokenRecord? = repo.findByIdOrNull(jti)?.toRecord()
 
     override fun revoke(jti: UUID, at: Instant, replacedBy: UUID?) {
-        jdbc.update("update refresh_token set revoked_at = coalesce(revoked_at, ?), replaced_by = ? where jti = ?", Timestamp.from(at), replacedBy, jti)
+        val t = repo.findByIdOrNull(jti) ?: return
+        t.revokedAt = t.revokedAt ?: at
+        t.replacedBy = replacedBy
+        repo.save(t)
     }
 
     override fun revokeFamily(familyId: UUID, at: Instant) {
-        jdbc.update("update refresh_token set revoked_at = ? where family_id = ? and revoked_at is null", Timestamp.from(at), familyId)
+        repo.revokeFamily(familyId, at)
     }
 
     override fun revokeAllForUser(userId: UserId, at: Instant) {
-        jdbc.update("update refresh_token set revoked_at = ? where user_id = ? and revoked_at is null", Timestamp.from(at), userId.value)
+        repo.revokeAllForUser(userId.value, at)
     }
 }
 
 @Component
-class StaffInvitationJdbcAdapter(private val jdbc: JdbcTemplate, private val em: EntityManager) : StaffInvitationPort {
-    private val mapper = RowMapper { rs, _ ->
-        StaffInvitation(
-            id = StaffInvitationId(rs.uuid("id")), institutionId = InstitutionId(rs.uuid("institution_id")),
-            email = rs.getString("email"), name = rs.getString("name"), role = Role.valueOf(rs.getString("role")),
-            token = rs.getString("token"), invitedBy = UserId(rs.uuid("invited_by")), expiresAt = rs.instant("expires_at"),
-            acceptedAt = rs.instantOrNull("accepted_at"), revokedAt = rs.instantOrNull("revoked_at"), createdAt = rs.instant("created_at"),
-        )
-    }
+class StaffInvitationJpaAdapter(private val repo: StaffInvitationJpaRepository) : StaffInvitationPort {
 
+    private fun StaffInvitationEntity.toDomain() = StaffInvitation(
+        id = StaffInvitationId(id), institutionId = InstitutionId(institutionId),
+        email = email, name = name, role = Role.valueOf(role),
+        token = token, invitedBy = UserId(invitedBy), expiresAt = expiresAt,
+        acceptedAt = acceptedAt, revokedAt = revokedAt, createdAt = createdAt,
+    )
+
+    /** 처음엔 넣고, 이후엔 수락·취소 시각만 바뀐다 */
     override fun save(invitation: StaffInvitation): StaffInvitation {
-        // 운영사 기관 등록(SAAS-001)은 같은 트랜잭션에서 JPA 로 막 저장한 institution 을 FK 로 참조한다 → 먼저 내보낸다
-        if (TransactionSynchronizationManager.isActualTransactionActive()) em.flush()
-        jdbc.update(
-            """insert into staff_invitation (id, institution_id, email, name, role, token, invited_by, expires_at, accepted_at, revoked_at, created_at)
-               values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-               on conflict (id) do update set accepted_at = excluded.accepted_at, revoked_at = excluded.revoked_at""",
-            invitation.id.value, invitation.institutionId.value, invitation.email, invitation.name, invitation.role.name,
-            invitation.token, invitation.invitedBy.value, Timestamp.from(invitation.expiresAt),
-            invitation.acceptedAt.ts(), invitation.revokedAt.ts(), Timestamp.from(invitation.createdAt),
+        repo.save(
+            StaffInvitationEntity(
+                invitation.id.value, invitation.institutionId.value, invitation.email, invitation.name, invitation.role.name,
+                invitation.token, invitation.invitedBy.value, invitation.expiresAt,
+                invitation.acceptedAt, invitation.revokedAt, invitation.createdAt,
+            ),
         )
         return invitation
     }
 
     override fun find(id: StaffInvitationId, institutionId: InstitutionId): StaffInvitation? =
-        jdbc.query("select * from staff_invitation where id = ? and institution_id = ?", mapper, id.value, institutionId.value).firstOrNull()
+        repo.findByIdAndInstitutionId(id.value, institutionId.value)?.toDomain()
 
-    override fun findByToken(token: String): StaffInvitation? =
-        jdbc.query("select * from staff_invitation where token = ?", mapper, token).firstOrNull()
+    override fun findByToken(token: String): StaffInvitation? = repo.findByToken(token)?.toDomain()
 
     override fun findByInstitution(institutionId: InstitutionId): List<StaffInvitation> =
-        jdbc.query("select * from staff_invitation where institution_id = ? order by created_at desc", mapper, institutionId.value)
+        repo.findByInstitutionIdOrderByCreatedAtDesc(institutionId.value).map { it.toDomain() }
 }
 
 @Component
-class TermsJdbcAdapter(private val jdbc: JdbcTemplate) : TermsPort {
-    override fun findAll(): List<Terms> = jdbc.query("select * from terms") { rs, _ ->
+class TermsJpaAdapter(
+    private val terms: TermsJpaRepository,
+    private val agreements: TermsAgreementJpaRepository,
+    private val q: JpaQueries,
+) : TermsPort {
+    override fun findAll(): List<Terms> = terms.findAll().map {
         Terms(
-            id = TermsId(rs.uuid("id")), type = TermsType.valueOf(rs.getString("type")), version = rs.getInt("version"),
-            title = rs.getString("title"), body = rs.getString("body"), required = rs.getBoolean("required"),
-            effectiveAt = rs.instant("effective_at"),
+            id = TermsId(it.id), type = TermsType.valueOf(it.type), version = it.version,
+            title = it.title, body = it.body, required = it.required,
+            effectiveAt = it.effectiveAt,
         )
     }
 
-    override fun findAgreedIds(userId: UserId): Set<TermsId> =
-        jdbc.query("select terms_id from terms_agreement where user_id = ?", { rs, _ -> TermsId(rs.uuid("terms_id")) }, userId.value).toSet()
+    override fun findAgreedIds(userId: UserId): Set<TermsId> = agreements.findByUserId(userId.value).map { TermsId(it.termsId) }.toSet()
 
     override fun saveAgreements(agreements: List<TermsAgreement>) {
-        if (agreements.isEmpty()) return
-        jdbc.batchUpdate(
-            "insert into terms_agreement (user_id, terms_id, agreed_at, ip) values (?, ?, ?, ?) on conflict do nothing",
-            agreements.map { arrayOf(it.userId.value, it.termsId.value, Timestamp.from(it.agreedAt), it.ip) },
+        q.insertValues(
+            "insert into terms_agreement (user_id, terms_id, agreed_at, ip)",
+            agreements.map { listOf(it.userId.value, it.termsId.value, it.agreedAt, typed(it.ip)) },
+            "on conflict do nothing",
         )
     }
 }

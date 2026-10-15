@@ -16,7 +16,7 @@ data class SurveyResponseRow(
 
 data class NewQuestion(val type: QuestionType, val text: String, val options: List<String>, val required: Boolean)
 
-/** NTC-010 저장소 (JDBC) */
+/** NTC-010 저장소 (JPA) */
 interface SurveyPort {
     fun insert(
         institutionId: InstitutionId, author: UserId, title: String, description: String?, closesAt: Instant?, now: Instant,

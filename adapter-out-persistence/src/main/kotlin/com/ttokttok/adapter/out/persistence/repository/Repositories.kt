@@ -23,21 +23,73 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
-interface InstitutionJpaRepository : JpaRepository<InstitutionEntity, UUID>
+interface InstitutionJpaRepository : JpaRepository<InstitutionEntity, UUID> {
+    @Query("select count(i) from InstitutionEntity i where i.id = :id and i.isSample = true")
+    fun countSample(@Param("id") id: UUID): Long
+
+    /** 이 사용자가 소속된, 아직 이용 중인 가장 최근 샘플 기관 (id, name) */
+    @Query(
+        """select i.id, i.name from InstitutionEntity i, MembershipEntity m
+            where m.institutionId = i.id and m.userId = :u and i.isSample = true and i.serviceStatus = 'ACTIVE'
+            order by i.createdAt desc""",
+    )
+    fun findSamplesOf(@Param("u") userId: UUID, pageable: Pageable): List<Array<Any?>>
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update InstitutionEntity i set i.missingAlertMinutes = :m, i.missingAlertParent = :p, i.updatedAt = :now where i.id = :id")
+    fun setMissingAlertPolicy(@Param("id") id: UUID, @Param("m") minutes: Int, @Param("p") notifyParent: Boolean, @Param("now") now: Instant): Int
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update InstitutionEntity i set i.sessionIdleMinutes = :m where i.id = :id")
+    fun setSessionIdleMinutes(@Param("id") id: UUID, @Param("m") minutes: Int): Int
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update InstitutionEntity i set i.isSample = true where i.id = :id")
+    fun markSample(@Param("id") id: UUID): Int
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+        """update InstitutionEntity i set i.serviceStatus = :st, i.statusReason = :reason, i.statusChangedAt = :now, i.updatedAt = :now
+            where i.id = :id and (:sampleOnly = false or i.isSample = true)""",
+    )
+    fun setServiceStatus(
+        @Param("id") id: UUID, @Param("st") status: String, @Param("reason") reason: String?, @Param("now") now: Instant,
+        @Param("sampleOnly") sampleOnly: Boolean,
+    ): Int
+}
 
 interface UserJpaRepository : JpaRepository<UserEntity, UUID> {
     fun findByEmail(email: String): UserEntity?
     fun findByPhoneHash(phoneHash: String): UserEntity?
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update UserEntity u set u.locale = :l, u.updatedAt = :now where u.id = :id")
+    fun setLocale(@Param("id") id: UUID, @Param("l") locale: String, @Param("now") now: Instant): Int
 }
 
 interface MembershipJpaRepository : JpaRepository<MembershipEntity, UUID> {
     fun findByUserIdAndInstitutionId(userId: UUID, institutionId: UUID): MembershipEntity?
     fun findByUserId(userId: UUID): List<MembershipEntity>
     fun findByInstitutionId(institutionId: UUID): List<MembershipEntity>
+    fun findByInstitutionIdAndRoleIn(institutionId: UUID, roles: Collection<String>): List<MembershipEntity>
+    fun existsByInstitutionIdAndUserIdAndRoleNot(institutionId: UUID, userId: UUID, role: String): Boolean
+    fun existsByUserIdAndInstitutionIdAndRoleIn(userId: UUID, institutionId: UUID, roles: Collection<String>): Boolean
+    fun countByInstitutionIdAndRoleNot(institutionId: UUID, role: String): Long
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from MembershipEntity m where m.institutionId = :i")
+    fun deleteByInstitution(@Param("i") institutionId: UUID): Int
 }
 
 interface ClassroomJpaRepository : JpaRepository<ClassroomEntity, UUID> {
@@ -52,6 +104,10 @@ interface StudentJpaRepository : JpaRepository<StudentEntity, UUID>, JpaSpecific
     fun findByIdAndInstitutionId(id: UUID, institutionId: UUID): StudentEntity?
     fun findByInstitutionId(institutionId: UUID): List<StudentEntity>
     fun findByChildIdIn(childIds: Collection<UUID>): List<StudentEntity>
+    fun countByInstitutionIdAndStatusNot(institutionId: UUID, status: String): Long
+
+    @Query("select s.id from StudentEntity s where s.institutionId = :i and s.status <> 'WITHDRAWN' and s.id in (:ids)")
+    fun findActiveIds(@Param("i") institutionId: UUID, @Param("ids") ids: Collection<UUID>): List<UUID>
 }
 
 interface EnrollmentJpaRepository : JpaRepository<EnrollmentEntity, Long> {
@@ -59,6 +115,28 @@ interface EnrollmentJpaRepository : JpaRepository<EnrollmentEntity, Long> {
     fun findByClassroomIdAndToDateIsNull(classroomId: UUID): List<EnrollmentEntity>
     fun findByStudentIdAndClassroomIdAndToDateIsNull(studentId: UUID, classroomId: UUID): List<EnrollmentEntity>
     fun findByStudentId(studentId: UUID): List<EnrollmentEntity>
+
+    /** 현재 배정(종료일 없음)의 (원생 id, 반 이름, 시작일) */
+    @Query(
+        """select e.studentId, c.name, e.fromDate from EnrollmentEntity e join ClassroomEntity c on c.id = e.classroomId
+            where e.toDate is null and e.studentId in (:ids)""",
+    )
+    fun findCurrentClassroomNames(@Param("ids") studentIds: Collection<UUID>): List<Array<Any?>>
+
+    /** 원생이 지금 다니는 반들의 담당 교사 */
+    @Query(
+        """select distinct ct.userId from EnrollmentEntity e, ClassroomTeacherEntity ct
+            where ct.classroomId = e.classroomId and e.studentId = :student and e.toDate is null""",
+    )
+    fun findCurrentTeacherIds(@Param("student") studentId: UUID): List<UUID>
+}
+
+/** 원생마다 가장 최근에 시작한 현재 반 이름 */
+fun EnrollmentJpaRepository.currentClassroomNameOf(studentIds: Collection<UUID>): Map<UUID, String> {
+    if (studentIds.isEmpty()) return emptyMap()
+    return studentIds.distinct().chunked(1000).flatMap { findCurrentClassroomNames(it) }
+        .groupBy { it[0] as UUID }
+        .mapValues { (_, rows) -> rows.maxBy { it[2] as LocalDate }[1] as String }
 }
 
 interface GuardianJpaRepository : JpaRepository<GuardianEntity, UUID> {
@@ -67,6 +145,10 @@ interface GuardianJpaRepository : JpaRepository<GuardianEntity, UUID> {
     fun findByPhoneHash(phoneHash: String): List<GuardianEntity>
     fun findByUserId(userId: UUID): List<GuardianEntity>
     fun findByIdAndInstitutionId(id: UUID, institutionId: UUID): GuardianEntity?
+
+    /** 앱이 연결된 보호자 계정 */
+    @Query("select distinct g.userId from GuardianEntity g where g.studentId = :s and g.userId is not null and g.linkStatus = 'LINKED'")
+    fun findLinkedUserIds(@Param("s") studentId: UUID): List<UUID>
 }
 
 interface DestinationJpaRepository : JpaRepository<DestinationEntity, UUID> {
@@ -92,7 +174,7 @@ interface AttendanceDayJpaRepository : JpaRepository<AttendanceDayEntity, UUID> 
 
     fun findByStatusAndDateLessThanEqual(status: String, date: LocalDate): List<AttendanceDayEntity>
 
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(
         value = """insert into attendance_day (id, institution_id, student_id, classroom_id, date, status)
                    values (:id, :institutionId, :studentId, :classroomId, :date, 'SCHEDULED')
@@ -139,7 +221,7 @@ interface OutboxJpaRepository : JpaRepository<OutboxEntity, UUID> {
 
 interface DeviceTokenJpaRepository : JpaRepository<DeviceTokenEntity, String> {
     fun findByUserIdInAndFlavor(userIds: Collection<UUID>, flavor: String): List<DeviceTokenEntity>
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("delete from DeviceTokenEntity d where d.token = :token and d.userId = :userId")
     fun deleteByTokenAndUserId(@Param("token") token: String, @Param("userId") userId: UUID): Int
 }

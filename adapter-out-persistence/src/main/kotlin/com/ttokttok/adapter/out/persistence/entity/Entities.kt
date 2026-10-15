@@ -31,6 +31,18 @@ class InstitutionEntity(
     var logoFileId: UUID? = null,
     var sealFileId: UUID? = null,
     var type: String = "ACADEMY",
+    var createdAt: Instant = Instant.now(),
+    var updatedAt: Instant = Instant.now(),
+    // SAAS-001 서비스 상태 (V18)
+    var serviceStatus: String = "ACTIVE",
+    var statusReason: String? = null,
+    var statusChangedAt: Instant? = null,
+    // AUTH-010 자동 로그아웃(분), ONB-003 샘플 기관 (V20)
+    var sessionIdleMinutes: Int = 30,
+    var isSample: Boolean = false,
+    // ATT-010 미등원 경고 (V22)
+    var missingAlertMinutes: Int = 30,
+    var missingAlertParent: Boolean = true,
 )
 
 @Entity @Table(name = "app_user")
@@ -42,6 +54,9 @@ class UserEntity(
     var phoneHash: String?,
     var passwordHash: String,
     var mustChangePassword: Boolean,
+    var locale: String = "ko",   // SET-007 (V24)
+    var createdAt: Instant = Instant.now(),
+    var updatedAt: Instant = Instant.now(),
 )
 
 @Entity @Table(name = "membership")
@@ -79,6 +94,7 @@ class StudentEntity(
     var status: String,
     var memo: String? = null,
     var childId: UUID? = null,
+    @Column(insertable = false, updatable = false) var createdAt: Instant? = null,   // DB 기본값 now()
 )
 
 @Entity @Table(name = "enrollment")

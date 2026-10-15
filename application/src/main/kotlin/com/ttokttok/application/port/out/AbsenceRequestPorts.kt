@@ -10,7 +10,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.util.UUID
 
-/** ATT-007 저장소 (JDBC) */
+/** ATT-007 저장소 (JPA) */
 interface AbsenceRequestPort {
     /** 같은 아이·날짜·종류의 살아있는 신청이 있으면 null */
     fun insert(
