@@ -1,5 +1,6 @@
 package com.ttokttok.adapter.out.persistence.entity
 
+import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
@@ -27,6 +28,7 @@ class InstitutionGeofenceEntity(
     @Id var institutionId: UUID,
     var latitude: Double,
     var longitude: Double,
+    @Column(name = "radius_m")
     var radiusM: Int,
     var updatedAt: Instant,
 )
@@ -64,6 +66,7 @@ class QrScanLogEntity(
     var qrId: UUID?,
     var classroomId: UUID?,
     var outcome: String,
+    @Column(name = "distance_m")
     var distanceM: Int?,
     var at: Instant,
 )
