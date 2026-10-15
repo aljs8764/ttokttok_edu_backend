@@ -2,6 +2,7 @@ package com.ttokttok.application.port.`in`
 
 import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.UserId
+import com.ttokttok.domain.institution.InstitutionType
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -24,6 +25,9 @@ data class PlatformInstitutionRow(
     val studentCount: Int,
     val voucherCode: String?,
     val createdAt: Instant,
+    /** SAAS-008 매핑된 메뉴 그룹 (없으면 모든 메뉴) */
+    val menuGroupId: UUID? = null,
+    val menuGroupName: String? = null,
 )
 
 data class PlatformInstitutionDetail(
@@ -35,13 +39,23 @@ data class PlatformInstitutionDetail(
     val cardLast4: String?,
     val staffCount: Int,
     val recentPayments: List<PlatformPaymentView>,
+    /** 운영사가 만든 기관의 가장 최근 원장 초대 (없으면 null) */
+    val ownerInvitation: OwnerInvitationView? = null,
 )
+
+data class OwnerInvitationView(val email: String, val name: String, val status: String, val expiresAt: Instant, val acceptedAt: Instant?)
+
+data class CreateInstitution(val institutionName: String, val type: InstitutionType, val ownerName: String, val ownerEmail: String)
 
 interface PlatformInstitutionUseCase {
     fun list(actor: UserId, status: ServiceStatus?, keyword: String?): List<PlatformInstitutionRow>
     fun detail(actor: UserId, institutionId: UUID): PlatformInstitutionDetail
     fun approve(actor: UserId, institutionId: UUID): PlatformInstitutionRow
     fun suspend(actor: UserId, institutionId: UUID, reason: String): PlatformInstitutionRow
+    /** 운영사가 기관을 직접 만들고 원장에게 초대 메일을 보낸다. 원장이 링크에서 수락하면 OWNER 계정이 된다 */
+    fun create(actor: UserId, command: CreateInstitution): PlatformInstitutionDetail
+    /** 원장 초대 다시 보내기 — 대기 중인 초대는 취소하고 새 링크(7일)를 보낸다 */
+    fun resendOwnerInvitation(actor: UserId, institutionId: UUID): PlatformInstitutionDetail
     /** 운영사가 구독 상태를 직접 바꿈 (플랜·상태·다음 결제일) */
     fun overrideSubscription(actor: UserId, institutionId: UUID, planCode: String, status: SubscriptionStatus, nextBillingDate: LocalDate?): PlatformInstitutionDetail
 }
@@ -205,4 +219,48 @@ interface PlatformMetricsUseCase {
 /** 운영사 여부 */
 interface PlatformAccessQuery {
     fun isPlatformAdmin(userId: UserId): Boolean
+}
+
+// ───────── SAAS-009 운영사 계정 관리 ─────────
+data class PlatformAdminView(val userId: UUID, val name: String, val email: String?, val createdAt: Instant)
+
+interface PlatformAdminUseCase {
+    fun list(actor: UserId): List<PlatformAdminView>
+    /** 이미 가입한 계정(이메일)을 운영사로 지정 */
+    fun add(actor: UserId, email: String): PlatformAdminView
+    /** 자기 자신은 해제할 수 없다 (그래서 운영사가 0명이 되는 일은 없다) */
+    fun remove(actor: UserId, userId: UUID)
+}
+
+// ───────── SAAS-008 기관별 메뉴 그룹 ─────────
+data class MenuGroupInstitution(val id: UUID, val name: String)
+
+data class MenuGroupView(
+    val id: UUID,
+    val name: String,
+    val description: String?,
+    /** 끈 메뉴 키 (관리자 웹 경로). 비어 있으면 모든 메뉴 */
+    val disabledMenus: Set<String>,
+    val institutions: List<MenuGroupInstitution>,
+    val createdAt: Instant,
+    val updatedAt: Instant,
+)
+
+interface MenuGroupUseCase {
+    data class Command(val name: String, val description: String?, val disabledMenus: Set<String>)
+
+    fun list(actor: UserId): List<MenuGroupView>
+    fun create(actor: UserId, command: Command): MenuGroupView
+    fun update(actor: UserId, id: UUID, command: Command): MenuGroupView
+    /** 지우면 매핑된 기관은 모든 메뉴로 돌아간다 */
+    fun delete(actor: UserId, id: UUID)
+    fun replaceInstitutions(actor: UserId, id: UUID, institutionIds: Set<UUID>): MenuGroupView
+    fun assign(actor: UserId, institutionId: UUID, groupId: UUID?)
+}
+
+/** 기관 화면용: 이 기관에서 끈 메뉴 (구성원이면 상태와 무관하게 조회) */
+data class InstitutionMenusView(val menuGroupId: UUID?, val menuGroupName: String?, val disabledMenus: Set<String>)
+
+interface InstitutionMenusQuery {
+    fun menus(actor: UserId, institutionId: InstitutionId): InstitutionMenusView
 }

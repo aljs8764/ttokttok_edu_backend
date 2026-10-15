@@ -1,5 +1,7 @@
 package com.ttokttok.application.port.out
 
+import com.ttokttok.application.port.`in`.MenuGroupView
+import com.ttokttok.application.port.`in`.PlatformAdminView
 import com.ttokttok.application.port.`in`.PlatformInstitutionRow
 import com.ttokttok.application.port.`in`.PlatformNoticeKind
 import com.ttokttok.application.port.`in`.PlatformNoticeView
@@ -21,10 +23,23 @@ import java.util.UUID
 
 interface PlatformAdminPort {
     fun isAdmin(userId: UserId): Boolean
-    /** 운영사 계정이 하나라도 있는지 (기동 시 초기 계정 생성 판단) */
-    fun hasAny(): Boolean
-    /** 운영사로 지정. 이미 지정돼 있으면 아무 일도 하지 않는다 */
-    fun grant(userId: UserId)
+    fun list(): List<PlatformAdminView>
+    fun add(userId: UserId, now: Instant)
+    fun remove(userId: UserId)
+}
+
+/** SAAS-008 메뉴 그룹 저장소. 끈 메뉴(disabledMenus)와 기관 매핑을 함께 다룬다 */
+interface MenuGroupPort {
+    fun list(): List<MenuGroupView>
+    fun find(id: UUID): MenuGroupView?
+    fun existsByName(name: String, exceptId: UUID?): Boolean
+    fun save(id: UUID, name: String, description: String?, disabledMenus: Set<String>, now: Instant)
+    fun delete(id: UUID)
+    /** 그룹에 매핑된 기관을 정확히 이 목록으로 맞춘다 (다른 그룹에 있던 기관은 옮겨 온다) */
+    fun replaceInstitutions(groupId: UUID, institutionIds: Set<UUID>, now: Instant)
+    /** null 이면 매핑 해제 → 모든 메뉴 */
+    fun assign(institutionId: UUID, groupId: UUID?, now: Instant)
+    fun findByInstitution(institutionId: UUID): MenuGroupView?
 }
 
 /** 기관 서비스 상태. AccessGuard 가 정지·승인 대기 기관의 업무 API 를 막는 데 쓴다 */

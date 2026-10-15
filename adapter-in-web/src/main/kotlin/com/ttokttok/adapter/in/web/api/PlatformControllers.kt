@@ -1,8 +1,14 @@
 package com.ttokttok.adapter.`in`.web.api
 
 import com.ttokttok.application.port.`in`.ActivePlatformNoticeQuery
+import com.ttokttok.application.port.`in`.CreateInstitution
+import com.ttokttok.application.port.`in`.InstitutionMenusQuery
 import com.ttokttok.application.port.`in`.InstitutionSupportUseCase
+import com.ttokttok.application.port.`in`.MenuGroupUseCase
+import com.ttokttok.application.port.`in`.MenuGroupView
 import com.ttokttok.application.port.`in`.PlatformAccessQuery
+import com.ttokttok.application.port.`in`.PlatformAdminUseCase
+import com.ttokttok.application.port.`in`.PlatformAdminView
 import com.ttokttok.application.port.`in`.PlatformBillingUseCase
 import com.ttokttok.application.port.`in`.PlatformInstitutionDetail
 import com.ttokttok.application.port.`in`.PlatformInstitutionRow
@@ -24,6 +30,7 @@ import com.ttokttok.application.port.`in`.VoucherUseCase
 import com.ttokttok.application.port.`in`.VoucherView
 import com.ttokttok.application.port.out.ClockPort
 import com.ttokttok.domain.common.InvalidInputException
+import com.ttokttok.domain.institution.InstitutionType
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -57,12 +64,16 @@ private fun PlatformPaymentView.toResponse() = mapOf(
 private fun PlatformInstitutionRow.toResponse() = mapOf(
     "id" to id, "name" to name, "ownerName" to ownerName, "type" to type, "serviceStatus" to serviceStatus.name, "statusReason" to statusReason,
     "planCode" to planCode, "subscriptionStatus" to subscriptionStatus, "studentCount" to studentCount, "voucherCode" to voucherCode, "createdAt" to createdAt,
+    "menuGroupId" to menuGroupId, "menuGroupName" to menuGroupName,
 )
 
 private fun PlatformInstitutionDetail.toResponse() = row.toResponse() + mapOf(
     "nextBillingDate" to nextBillingDate, "trialEndsOn" to trialEndsOn, "cancelAtPeriodEnd" to cancelAtPeriodEnd,
     "card" to cardLast4?.let { mapOf("brand" to cardBrand, "last4" to it) }, "staffCount" to staffCount,
     "recentPayments" to recentPayments.map { it.toResponse() },
+    "ownerInvitation" to ownerInvitation?.let {
+        mapOf("email" to it.email, "name" to it.name, "status" to it.status, "expiresAt" to it.expiresAt, "acceptedAt" to it.acceptedAt)
+    },
 )
 
 private fun VoucherView.toResponse() = mapOf(
@@ -114,6 +125,86 @@ class PlatformMeController(private val access: PlatformAccessQuery) {
     fun me(@AuthenticationPrincipal jwt: Jwt) = mapOf("platformAdmin" to access.isPlatformAdmin(jwt.userId()))
 }
 
+// ───────── SAAS-009 운영사 계정 관리 ─────────
+@RestController
+class PlatformAdminController(private val admins: PlatformAdminUseCase) {
+    data class AddRequest(@field:NotBlank val email: String)
+
+    @GetMapping("/api/v1/platform/admins")
+    fun list(@AuthenticationPrincipal jwt: Jwt) = admins.list(jwt.userId()).map { it.toResponse() }
+
+    @PostMapping("/api/v1/platform/admins")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun add(@AuthenticationPrincipal jwt: Jwt, @Valid @RequestBody req: AddRequest) = admins.add(jwt.userId(), req.email).toResponse()
+
+    @DeleteMapping("/api/v1/platform/admins/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun remove(@AuthenticationPrincipal jwt: Jwt, @PathVariable userId: UUID) {
+        admins.remove(jwt.userId(), userId)
+    }
+
+    private fun PlatformAdminView.toResponse() = mapOf("userId" to userId, "name" to name, "email" to email, "createdAt" to createdAt)
+}
+
+// ───────── SAAS-008 기관별 메뉴 그룹 ─────────
+@RestController
+class MenuGroupController(private val groups: MenuGroupUseCase) {
+    data class GroupRequest(
+        @field:NotBlank @field:Size(max = 50) val name: String,
+        @field:Size(max = 200) val description: String? = null,
+        @field:Size(max = 100) val disabledMenus: List<String> = emptyList(),
+    )
+    data class InstitutionsRequest(@field:Size(max = 1000) val institutionIds: List<UUID>)
+    data class AssignRequest(val menuGroupId: UUID?)
+
+    @GetMapping("/api/v1/platform/menu-groups")
+    fun list(@AuthenticationPrincipal jwt: Jwt) = groups.list(jwt.userId()).map { it.toResponse() }
+
+    @PostMapping("/api/v1/platform/menu-groups")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun create(@AuthenticationPrincipal jwt: Jwt, @Valid @RequestBody req: GroupRequest) = groups.create(jwt.userId(), req.toCommand()).toResponse()
+
+    @PutMapping("/api/v1/platform/menu-groups/{id}")
+    fun update(@AuthenticationPrincipal jwt: Jwt, @PathVariable id: UUID, @Valid @RequestBody req: GroupRequest) =
+        groups.update(jwt.userId(), id, req.toCommand()).toResponse()
+
+    @DeleteMapping("/api/v1/platform/menu-groups/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun delete(@AuthenticationPrincipal jwt: Jwt, @PathVariable id: UUID) {
+        groups.delete(jwt.userId(), id)
+    }
+
+    /** 그룹에 매핑된 기관을 이 목록으로 맞춘다 */
+    @PutMapping("/api/v1/platform/menu-groups/{id}/institutions")
+    fun replaceInstitutions(@AuthenticationPrincipal jwt: Jwt, @PathVariable id: UUID, @Valid @RequestBody req: InstitutionsRequest) =
+        groups.replaceInstitutions(jwt.userId(), id, req.institutionIds.toSet()).toResponse()
+
+    /** 기관 하나의 메뉴 그룹 지정 (null 이면 해제 → 모든 메뉴) */
+    @PutMapping("/api/v1/platform/institutions/{id}/menu-group")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun assign(@AuthenticationPrincipal jwt: Jwt, @PathVariable id: UUID, @RequestBody req: AssignRequest) {
+        groups.assign(jwt.userId(), id, req.menuGroupId)
+    }
+
+    private fun GroupRequest.toCommand() = MenuGroupUseCase.Command(name, description, disabledMenus.toSet())
+
+    private fun MenuGroupView.toResponse() = mapOf(
+        "id" to id, "name" to name, "description" to description, "disabledMenus" to disabledMenus.toList(),
+        "institutions" to institutions.map { mapOf("id" to it.id, "name" to it.name) },
+        "createdAt" to createdAt, "updatedAt" to updatedAt,
+    )
+}
+
+// ───────── SAAS-008 내 기관에서 끈 메뉴 (정지·승인 대기여도 조회 가능) ─────────
+@RestController
+class InstitutionMenusController(private val menus: InstitutionMenusQuery) {
+    @GetMapping("/api/v1/institution/menus")
+    fun get(@AuthenticationPrincipal jwt: Jwt, @RequestHeader(INSTITUTION_HEADER) institutionId: UUID) =
+        menus.menus(jwt.userId(), inst(institutionId)).let {
+            mapOf("menuGroupId" to it.menuGroupId, "menuGroupName" to it.menuGroupName, "disabledMenus" to it.disabledMenus.toList())
+        }
+}
+
 // ───────── SAAS-001 기관 ─────────
 @RestController
 class PlatformInstitutionController(private val institutions: PlatformInstitutionUseCase) {
@@ -123,6 +214,23 @@ class PlatformInstitutionController(private val institutions: PlatformInstitutio
     @GetMapping("/api/v1/platform/institutions")
     fun list(@AuthenticationPrincipal jwt: Jwt, @RequestParam(required = false) status: String?, @RequestParam(required = false) q: String?) =
         institutions.list(jwt.userId(), parseEnum(status, ServiceStatus::valueOf, "INVALID_STATUS"), q).map { it.toResponse() }
+
+    data class CreateRequest(
+        @field:NotBlank @field:Size(max = 100) val institutionName: String,
+        val type: InstitutionType = InstitutionType.ACADEMY,
+        @field:NotBlank @field:Size(max = 50) val ownerName: String,
+        @field:NotBlank val ownerEmail: String,
+    )
+
+    /** 운영사가 기관을 등록하고 원장에게 초대 메일 발송 */
+    @PostMapping("/api/v1/platform/institutions")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun create(@AuthenticationPrincipal jwt: Jwt, @Valid @RequestBody req: CreateRequest) =
+        institutions.create(jwt.userId(), CreateInstitution(req.institutionName, req.type, req.ownerName, req.ownerEmail)).toResponse()
+
+    @PostMapping("/api/v1/platform/institutions/{id}/owner-invitation")
+    fun resendOwnerInvitation(@AuthenticationPrincipal jwt: Jwt, @PathVariable id: UUID) =
+        institutions.resendOwnerInvitation(jwt.userId(), id).toResponse()
 
     @GetMapping("/api/v1/platform/institutions/{id}")
     fun detail(@AuthenticationPrincipal jwt: Jwt, @PathVariable id: UUID) = institutions.detail(jwt.userId(), id).toResponse()

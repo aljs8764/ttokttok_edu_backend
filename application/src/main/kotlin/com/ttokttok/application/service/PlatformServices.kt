@@ -1,8 +1,10 @@
 package com.ttokttok.application.service
 
 import com.ttokttok.application.port.`in`.ActivePlatformNoticeQuery
+import com.ttokttok.application.port.`in`.CreateInstitution
 import com.ttokttok.application.port.`in`.InstitutionSupportUseCase
 import com.ttokttok.application.port.`in`.MetricsMonth
+import com.ttokttok.application.port.`in`.OwnerInvitationView
 import com.ttokttok.application.port.`in`.PlatformAccessQuery
 import com.ttokttok.application.port.`in`.PlatformBillingUseCase
 import com.ttokttok.application.port.`in`.PlatformInstitutionDetail
@@ -23,7 +25,9 @@ import com.ttokttok.application.port.`in`.TicketView
 import com.ttokttok.application.port.`in`.VoucherSettlementView
 import com.ttokttok.application.port.`in`.VoucherUseCase
 import com.ttokttok.application.port.`in`.VoucherView
+import com.ttokttok.application.port.out.AppLinksPort
 import com.ttokttok.application.port.out.ClockPort
+import com.ttokttok.application.port.out.InstitutionPort
 import com.ttokttok.application.port.out.OutboxPort
 import com.ttokttok.application.port.out.PlatformAdminPort
 import com.ttokttok.application.port.out.PlatformInstitutionPort
@@ -31,6 +35,8 @@ import com.ttokttok.application.port.out.PlatformMetricsPort
 import com.ttokttok.application.port.out.PlatformNoticePort
 import com.ttokttok.application.port.out.PlatformPaymentPort
 import com.ttokttok.application.port.out.RealtimePort
+import com.ttokttok.application.port.out.SendEmailPort
+import com.ttokttok.application.port.out.StaffInvitationPort
 import com.ttokttok.application.port.out.SubscriptionPort
 import com.ttokttok.application.port.out.SupportTicketPort
 import com.ttokttok.application.port.out.VoucherPort
@@ -40,7 +46,9 @@ import com.ttokttok.domain.common.InstitutionId
 import com.ttokttok.domain.common.InvalidInputException
 import com.ttokttok.domain.common.NotFoundException
 import com.ttokttok.domain.common.UserId
+import com.ttokttok.domain.institution.Institution
 import com.ttokttok.domain.messaging.TeacherPushRequested
+import com.ttokttok.domain.staff.StaffInvitation
 import com.ttokttok.domain.user.Role
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
@@ -71,7 +79,48 @@ class PlatformInstitutionService(
     private val subscriptions: SubscriptionPort,
     private val payments: PlatformPaymentPort,
     private val clock: ClockPort,
+    private val institutionStore: InstitutionPort,
+    private val invitations: StaffInvitationPort,
+    private val email: SendEmailPort,
+    private val links: AppLinksPort,
 ) : PlatformInstitutionUseCase {
+
+    @Transactional
+    override fun create(actor: UserId, command: CreateInstitution): PlatformInstitutionDetail {
+        guard.require(actor)
+        val name = command.institutionName.trim()
+        val ownerName = command.ownerName.trim()
+        if (name.isEmpty() || name.length > 100) throw InvalidInputException("INVALID_NAME", "기관명은 1~100자입니다")
+        // 운영사가 만든 기관은 승인된 상태(ACTIVE)로 시작한다 — 원장은 초대 수락만 하면 된다
+        val institution = institutionStore.save(Institution(InstitutionId.new(), name, ownerName, type = command.type))
+        inviteOwner(actor, institution.id, name, command.ownerEmail, ownerName)
+        return buildDetail(institution.id.value)
+    }
+
+    @Transactional
+    override fun resendOwnerInvitation(actor: UserId, institutionId: UUID): PlatformInstitutionDetail {
+        guard.require(actor)
+        val row = institutions.find(institutionId) ?: throw NotFoundException("기관")
+        val last = ownerInvitations(institutionId).firstOrNull() ?: throw NotFoundException("원장 초대")
+        if (last.acceptedAt != null) throw ConflictException("ALREADY_ACCEPTED", "원장이 이미 초대를 수락했습니다")
+        inviteOwner(actor, InstitutionId(institutionId), row.name, last.email, last.name)
+        return buildDetail(institutionId)
+    }
+
+    private fun inviteOwner(actor: UserId, institutionId: InstitutionId, institutionName: String, ownerEmail: String, ownerName: String) {
+        val now = clock.now()
+        val inv = StaffInvitation.issueOwner(institutionId, ownerEmail, ownerName, actor, now)
+        ownerInvitations(institutionId.value).filter { it.isUsable(now) }.forEach { invitations.save(it.revoke(now)) }
+        invitations.save(inv)
+        email.send(
+            inv.email, "[똑똑] $institutionName 원장 계정 초대",
+            "${inv.name}님, 똑똑에 $institutionName 기관이 등록되었습니다.\n" +
+                "아래 링크에서 7일 안에 원장 계정을 만들어 주세요.\n${links.staffInviteUrl(inv.token)}",
+        )
+    }
+
+    private fun ownerInvitations(institutionId: UUID) =
+        invitations.findByInstitution(InstitutionId(institutionId)).filter { it.role == Role.OWNER }.sortedByDescending { it.createdAt }
 
     @Transactional(readOnly = true)
     override fun list(actor: UserId, status: ServiceStatus?, keyword: String?): List<PlatformInstitutionRow> {
@@ -120,6 +169,19 @@ class PlatformInstitutionService(
         return PlatformInstitutionDetail(
             row, sub.nextBillingDate, sub.trialEndsOn, sub.cancelAtPeriodEnd, sub.cardBrand, sub.cardLast4,
             institutions.staffCount(institutionId), payments.recent(institutionId, 10),
+            ownerInvitation = ownerInvitations(institutionId).firstOrNull()?.let { inv ->
+                val now = clock.now()
+                OwnerInvitationView(
+                    inv.email, inv.name,
+                    status = when {
+                        inv.acceptedAt != null -> "ACCEPTED"
+                        inv.revokedAt != null -> "REVOKED"
+                        !now.isBefore(inv.expiresAt) -> "EXPIRED"
+                        else -> "PENDING"
+                    },
+                    expiresAt = inv.expiresAt, acceptedAt = inv.acceptedAt,
+                )
+            },
         )
     }
 }

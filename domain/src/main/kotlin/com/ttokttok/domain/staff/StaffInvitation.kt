@@ -14,7 +14,7 @@ import java.util.UUID
 
 @JvmInline value class StaffInvitationId(val value: UUID) { companion object { fun new() = StaffInvitationId(Uuid7.next()) } }
 
-/** 교직원 이메일 초대 (STF-002). 링크 7일 유효, 수락 시 계정 생성(또는 기존 계정 연결) + 소속 부여 */
+/** 교직원 이메일 초대 (STF-002, 원장 초대는 SAAS-001). 링크 7일 유효, 수락 시 계정 생성(또는 기존 계정 연결) + 소속 부여 */
 data class StaffInvitation(
     val id: StaffInvitationId,
     val institutionId: InstitutionId,
@@ -47,10 +47,18 @@ data class StaffInvitation(
         private val random = SecureRandom()
 
         fun issue(institutionId: InstitutionId, email: String, name: String, role: Role, invitedBy: UserId, now: Instant): StaffInvitation {
+            if (role !in setOf(Role.ADMIN, Role.TEACHER)) throw InvalidInputException("INVALID_ROLE", "실장(ADMIN) 또는 교사(TEACHER)만 초대할 수 있습니다")
+            return create(institutionId, email, name, role, invitedBy, now)
+        }
+
+        /** SAAS-001 운영사가 기관을 만들고 원장을 초대 — 원장(OWNER) 초대는 운영사만 발급한다 */
+        fun issueOwner(institutionId: InstitutionId, email: String, name: String, invitedBy: UserId, now: Instant): StaffInvitation =
+            create(institutionId, email, name, Role.OWNER, invitedBy, now)
+
+        private fun create(institutionId: InstitutionId, email: String, name: String, role: Role, invitedBy: UserId, now: Instant): StaffInvitation {
             val e = email.trim().lowercase()
             if (!EMAIL.matches(e)) throw InvalidInputException("INVALID_EMAIL", "이메일 형식이 올바르지 않습니다")
             if (name.isBlank() || name.length > 50) throw InvalidInputException("INVALID_NAME", "이름은 1~50자입니다")
-            if (role !in setOf(Role.ADMIN, Role.TEACHER)) throw InvalidInputException("INVALID_ROLE", "실장(ADMIN) 또는 교사(TEACHER)만 초대할 수 있습니다")
             val bytes = ByteArray(24).also(random::nextBytes)
             val token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
             return StaffInvitation(StaffInvitationId.new(), institutionId, e, name.trim(), role, token, invitedBy, now.plus(VALIDITY), createdAt = now)
